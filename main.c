@@ -6,6 +6,7 @@ int controlData[800][2];
 
 typedef struct
 {
+    int val;
     int start;     // Index of first adjacent node in Ea
     int length;    // Number of adjacent nodes
 } Node;
@@ -38,6 +39,7 @@ int main()
     }
 
     for(i=start; i <= maxNodes;i++){
+        nodes[i].val = i;
         nodes[i].length = 0;
         for(j = 0; j < maxEdges ; j++) {
             if (i == controlData[j][0]) {
