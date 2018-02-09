@@ -52,7 +52,7 @@ __global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, bool* d_oldFronti
 
         printf("start: %d\n", start);
         printf("end: %d\n", end);
-
+Wg
         for(i = start; i < end; i++){
             int nid = d_edges[i];
             d_visited[nid] = true;
