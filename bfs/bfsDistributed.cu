@@ -74,12 +74,20 @@ int main(){
         newFrontier[i] = false;
     }
 
+//Example 1
     vertices[0] = 0;
     vertices[1] = 2;
     vertices[2] = 3;
     vertices[3] = 4;
     vertices[4] = 5;
 
+    edges[0] = 1;
+    edges[1] = 2;
+    edges[2] = 4;
+    edges[3] = 3;
+    edges[4] = 4;
+
+//Example 2
 //    vertices[0] = 0;
 //    vertices[1] = 3;
 //    vertices[2] = 4;
@@ -94,11 +102,7 @@ int main(){
 //    edges[3] = 4;
 //    edges[4] = 5;
 
-    edges[0] = 1;
-    edges[1] = 2;
-    edges[2] = 4;
-    edges[3] = 3;
-    edges[4] = 4;
+
 
     //set source
     int source = 0;
