@@ -7,62 +7,49 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#define NUM_NODES 5
-
-typedef struct
-{
-    int id;
-    int start;     // Index of first adjacent node in Ea
-    int length;    // Number of adjacent nodes
-    bool visited;
-    int cost;
-} Node;
+#define NUM_NODES 6
 
 
 __global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, bool* d_oldFrontier, bool* d_newFrontier, bool* d_visited,
-     int* d_levels, int *d_currentLevel, bool *done){
+     int* d_levels, int *d_currentLevel, bool *d_done){
     int i;
 
     //Set the thread id
     int id = threadIdx.x + blockIdx.x * blockDim.x;
     if (id >= NUM_NODES)
-        *done = false;
+        *d_done = false;
 
-        printf("Kernel frontier: %d\n", d_oldFrontier[0]);
+    d_newFrontier[id] = 0;
 
-    if (d_oldFrontier[id] == true && d_visited[id] == false){
+    if (d_oldFrontier[id] == true && d_visited[id] == true){
         printf("Node order: %d \n", id); //This printf gives the order of vertices in BFS
 
         d_visited[id] = true;
         d_levels[id] = *d_currentLevel; //set the cost of the current node
 
-         atomicAdd(d_currentLevel, 1);
-
-        __syncthreads();
+        printf("GPU LEvel: %d\n",d_levels[id] );
 
 
         int start = d_vertices[id];
         int end;
-        if(id >= NUM_NODES){
+        if(d_vertices[id] >= NUM_NODES){
             end = start;
         }
         else{
          end = d_vertices[id + 1];
+          for(i = start; i < end; i++){
+                     int nid = d_edges[i];
+                     d_visited[nid] = true;
+                     d_newFrontier[nid] = true;
+
+                     *d_done = false;
+                 }
         }
-
-        printf("start: %d\n", start);
-        printf("end: %d\n", end);
-Wg
-        for(i = start; i < end; i++){
-            int nid = d_edges[i];
-            d_visited[nid] = true;
-            d_newFrontier[nid] = true;
-
-            *done = false;
+        __syncthreads();
+        if(d_vertices[id] >= NUM_NODES){
+                    *d_done = true;
         }
     }
-    printf("GPU new frontier values [%d]: %d\n",id, d_newFrontier[id]);
-    printf("GPU Done: %d\n", *done);
 }
 
 
@@ -93,6 +80,19 @@ int main(){
     vertices[3] = 4;
     vertices[4] = 5;
 
+//    vertices[0] = 0;
+//    vertices[1] = 3;
+//    vertices[2] = 4;
+//    vertices[3] = 5;
+//    vertices[4] = 5;
+//    vertices[5] = 5;
+
+
+//    edges[0] = 1;
+//    edges[1] = 2;
+//    edges[2] = 3;
+//    edges[3] = 4;
+//    edges[4] = 5;
 
     edges[0] = 1;
     edges[1] = 2;
@@ -104,6 +104,7 @@ int main(){
     int source = 0;
 
     oldFrontier[source] = true;
+    visited[source] = true;
 
     //COPY to GPU
     int* d_vertices;
@@ -150,9 +151,13 @@ int main(){
         cudaMemcpy(d_currentLevel, &currentLevel, sizeof(int), cudaMemcpyHostToDevice);
         cudaMemcpy(d_oldFrontier, oldFrontier, sizeof(bool) * NUM_NODES, cudaMemcpyHostToDevice);
 
+        for(i=0; i < NUM_NODES; i++){
+                    printf("old frontier values [%d]: %d\n",i, oldFrontier[i]);
+        }
+
 
         CUDA_BFS_KERNEL <<<blocks, threads >>>(d_vertices, d_edges, d_oldFrontier, d_newFrontier,
-                                               d_visited, d_levels, d_currentLevel, &done);
+                                               d_visited, d_levels, d_currentLevel, d_done);
 
 
         cudaMemcpy(&done, d_done , sizeof(bool), cudaMemcpyDeviceToHost);
@@ -164,10 +169,11 @@ int main(){
         for(i=0; i < NUM_NODES; i++){
             printf("new frontier values [%d]: %d\n",i, newFrontier[i]);
 
-            //oldFrontier[i] = false;
-            //if(newFrontier[i] == true){
-            //    oldFrontier[i] = true;
-            //}
+            oldFrontier[i] = false;
+            if(newFrontier[i] == true){
+                oldFrontier[i] = true;
+                newFrontier[i] = false;
+            }
 
         }
         currentLevel++;
@@ -177,9 +183,9 @@ int main(){
 
     printf("Number of times the kernel is called : %d \n", iterations);
 
-    printf("\nLevel\n: ");
+    printf("\nLevel:\n");
         for (int i = 0; i<NUM_NODES; i++)
-            printf( "node %d cost: %d\n", i, levels[i]);
+            printf("node %d cost: %d\n", i, levels[i]);
         printf("\n");
 
 }
