@@ -7,106 +7,138 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#define NUM_NODES 5
-
-typedef struct
-{
-    int id;
-    int start;     // Index of first adjacent node in Ea
-    int length;    // Number of adjacent nodes
-    bool visited;
-    bool frontier;
-    int cost;
-} Node;
+#define NUM_NODES 6
 
 
-__global__ void CUDA_BFS_KERNEL(Node *d_node, int *d_edges, bool *done)
-{
+__global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, bool* d_oldFrontier, bool* d_newFrontier, bool* d_visited,
+     int* d_levels, int *d_currentLevel, bool *d_done){
+    int i;
 
+    //Set the thread id
     int id = threadIdx.x + blockIdx.x * blockDim.x;
-    if (id > NUM_NODES)
-        *done = false;
+    if (id >= NUM_NODES)
+        *d_done = false;
 
-    if (d_node[id].frontier == true && d_node[id].visited == false){
-        printf("%d ", d_node[id].id); //This printf gives the order of vertices in BFS
-        d_node[id].frontier = false;
-        d_node[id].visited = true;
+    d_newFrontier[id] = 0;
+
+    if (d_oldFrontier[id] == true && d_visited[id] == true){
+        printf("Node order: %d \n", id); //This printf gives the order of vertices in BFS
+
+        d_visited[id] = true;
+        d_levels[id] = *d_currentLevel; //set the cost of the current node
+
+        printf("GPU LEvel: %d\n",d_levels[id] );
+
+
+        int start = d_vertices[id];
+        int end;
+        if(d_vertices[id] >= NUM_NODES){
+            end = start;
+        }
+        else{
+         end = d_vertices[id + 1];
+          for(i = start; i < end; i++){
+                     int nid = d_edges[i];
+                     d_visited[nid] = true;
+                     d_newFrontier[nid] = true;
+
+                     *d_done = false;
+                 }
+        }
         __syncthreads();
-
-        int i;
-        int start = d_node[id].start;
-        int end = start + d_node[id].length;
-
-        for(int i = start; i < end; i++){
-            int nid = d_edges[i];
-
-            if (d_node[nid].visited == false){
-                d_node[nid].cost = d_node[id].cost + 1;
-                d_node[nid].frontier = true;
-                *done = false;
-             }
+        if(d_vertices[id] >= NUM_NODES){
+                    *d_done = true;
         }
     }
 }
 
+int singleBFS(int NUM_NODES, int source,){
 
+}
 int main(){
-    Node node[NUM_NODES];
 
-        int edges[NUM_NODES];
+    int i;
 
-        node[0].start = 0;
-        node[0].length = 2;
+    int vertices[NUM_NODES];
+    int levels[NUM_NODES];
+    bool visited[NUM_NODES];
+    bool oldFrontier[NUM_NODES];
+    bool newFrontier[NUM_NODES];
 
-        node[1].start = 2;
-        node[1].length = 1;
+    int currentLevel = 0;
 
-        node[2].start = 3;
-        node[2].length = 1;
+    int edges[NUM_NODES];
 
-        node[3].start = 4;
-        node[3].length = 1;
+    for(i=0; i < NUM_NODES; i++){
+        levels[i] = -1;
+        visited[i] = false;
+        oldFrontier[i] = false;
+        newFrontier[i] = false;
+    }
 
-        node[4].start = 5;
-        node[4].length = 0;
+//Example 1
+//    vertices[0] = 0;
+//    vertices[1] = 2;
+//    vertices[2] = 3;
+//    vertices[3] = 4;
+//    vertices[4] = 5;
 
-        edges[0] = 1;
-        edges[1] = 2;
-        edges[2] = 4;
-        edges[3] = 3;
-        edges[4] = 4;
+//    edges[0] = 1;
+//    edges[1] = 2;
+//    edges[2] = 4;
+//    edges[3] = 3;
+//    edges[4] = 4;
 
-        int i=0;
-        for(i=0; i < NUM_NODES; i++){
-            node[i].id = i;
-            node[i].frontier = false;
-            node[i].visited = false;
-            node[i].cost = 0;
-        }
+//Example 2
+    vertices[0] = 0;
+    vertices[1] = 3;
+    vertices[2] = 4;
+    vertices[3] = 5;
+    vertices[4] = 5;
+    vertices[5] = 5;
 
-        //set source
-        int source = 0;
 
-        node[source].frontier = true;
+    edges[0] = 1;
+    edges[1] = 2;
+    edges[2] = 3;
+    edges[3] = 4;
+    edges[4] = 5;
 
-        for(i=0; i < NUM_NODES; i++){
-            printf("%d\n", node[i].id);
-            printf("%d\n", node[i].frontier);
-            printf("%d\n", node[i].visited);
-            printf("%d\n", node[i].cost);
-            printf("\n");
-        }
 
-     //COPY to GPU
-     int nodeSize = sizeof(Node);
-     int numBytes = NUM_NODES * nodeSize;
-     Node* d_node;
-     cudaMalloc((void**)&d_node, numBytes);
-     cudaMemcpy(d_node, node, numBytes, cudaMemcpyHostToDevice);
+
+    //set source
+    int source = 0;
+
+    oldFrontier[source] = true;
+    visited[source] = true;
+
+    //COPY to GPU
+    int* d_vertices;
+    cudaMalloc((void**)&d_vertices, sizeof(int) * NUM_NODES);
+    cudaMemcpy(d_vertices, vertices, sizeof(int) * NUM_NODES, cudaMemcpyHostToDevice);
 
     int* d_edges;
-    cudaMalloc((void**)&d_edges, sizeof(Node)*NUM_NODES);
-    cudaMemcpy(d_edges, edges, sizeof(Node)*NUM_NODES, cudaMemcpyHostToDevice);
+    cudaMalloc((void**)&d_edges, sizeof(int) * NUM_NODES);
+    cudaMemcpy(d_edges, edges, sizeof(int) * NUM_NODES, cudaMemcpyHostToDevice);
+
+    bool* d_visited;
+    cudaMalloc((void**)&d_visited, sizeof(bool) * NUM_NODES);
+    cudaMemcpy(d_visited, visited, sizeof(bool) * NUM_NODES, cudaMemcpyHostToDevice);
+
+    bool* d_oldFrontier; //memcpy in the iteration loop
+    cudaMalloc((void**)&d_oldFrontier, sizeof(bool) * NUM_NODES);
+
+    bool* d_newFrontier;
+    cudaMalloc((void**)&d_newFrontier, sizeof(bool) * NUM_NODES);
+    cudaMemcpy(d_newFrontier, &newFrontier, sizeof(bool) * NUM_NODES, cudaMemcpyHostToDevice);
+
+    int* d_levels;
+    cudaMalloc((void**)&d_levels, sizeof(int) * NUM_NODES);
+    cudaMemcpy(d_levels, &levels, sizeof(int) * NUM_NODES, cudaMemcpyHostToDevice);
+
+    int* d_currentLevel;
+    cudaMalloc((void**)&d_currentLevel, sizeof(int));
+
 
     int blocks = 1;
     int threads = NUM_NODES;
@@ -114,24 +146,52 @@ int main(){
     bool done;
     bool* d_done;
     cudaMalloc((void**)&d_done, sizeof(bool));
-    printf("\n\n");
-    int count = 0;
+
+    int iterations = 0;
 
     do {
-        count++;
+        iterations++;
         done = true;
+
         cudaMemcpy(d_done, &done, sizeof(bool), cudaMemcpyHostToDevice);
-        CUDA_BFS_KERNEL <<<blocks, threads >>>(d_node, d_edges, d_done);
+        cudaMemcpy(d_currentLevel, &currentLevel, sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_oldFrontier, oldFrontier, sizeof(bool) * NUM_NODES, cudaMemcpyHostToDevice);
+
+        for(i=0; i < NUM_NODES; i++){
+                    printf("old frontier values [%d]: %d\n",i, oldFrontier[i]);
+        }
+
+
+        CUDA_BFS_KERNEL <<<blocks, threads >>>(d_vertices, d_edges, d_oldFrontier, d_newFrontier,
+                                               d_visited, d_levels, d_currentLevel, d_done);
+
+
         cudaMemcpy(&done, d_done , sizeof(bool), cudaMemcpyDeviceToHost);
 
+        printf("done: %d\n", done);
+
+        cudaMemcpy(newFrontier, d_newFrontier, sizeof(bool) * NUM_NODES, cudaMemcpyDeviceToHost);
+
+        for(i=0; i < NUM_NODES; i++){
+            printf("new frontier values [%d]: %d\n",i, newFrontier[i]);
+
+            oldFrontier[i] = false;
+            if(newFrontier[i] == true){
+                oldFrontier[i] = true;
+                newFrontier[i] = false;
+            }
+
+        }
+        currentLevel++;
         } while (!done);
-    cudaMemcpy(node, d_node, numBytes, cudaMemcpyDeviceToHost);
 
-    printf("Number of times the kernel is called : %d \n", count);
+    cudaMemcpy(levels, d_levels, sizeof(int) * NUM_NODES, cudaMemcpyDeviceToHost);
 
-    printf("\nCost: ");
+    printf("Number of times the kernel is called : %d \n", iterations);
+
+    printf("\nLevel:\n");
         for (int i = 0; i<NUM_NODES; i++)
-            printf( "%d    ", node[i].cost);
+            printf("node %d cost: %d\n", i, levels[i]);
         printf("\n");
 
 }
