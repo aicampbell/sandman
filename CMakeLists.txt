@@ -3,5 +3,5 @@ project(sandman)
 
 set(CMAKE_C_STANDARD 99)
 
-set(SOURCE_FILES main.c)
+set(SOURCE_FILES main.cu)
 add_executable(sandman ${SOURCE_FILES})

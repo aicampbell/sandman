@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "bfs/bfs.h"
 
 int controlData[800][2];
 int maxNodes, maxEdges;
