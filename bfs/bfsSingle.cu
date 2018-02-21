@@ -10,9 +10,6 @@
 #include "bfs.h"
 #include <mpi.h>
 
-
-
-
 __global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, bool* d_oldFrontier, bool* d_newFrontier, bool* d_visited,
      int* d_levels, int *d_currentLevel, bool *d_done, int *d_NUM_NODES){
     int i;
@@ -333,38 +330,14 @@ void distributedBFS(int NUM_NODES, int world_rank, int world_size){
 
             }
             currentLevel++;
+            MPI_Barrier(MPI_COMM_WORLD);
         }
-        else{
+        else {
+            bool elementsPerProc = NUM_NODES / world_size;
+            bool *subOldFrontier = malloc(sizeof(float) * elementsPerProc);
 
-        iterations++;
-        done = true;
+            MPI_Scatter(oldFrontier, elementsPerProc, MPI_INT, subOldFrontier, elementsPerProc, MPI_INT, 0, MPI_COMM_WORLD);
 
-        cudaMemcpy(d_done, &done, sizeof(bool), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_currentLevel, &currentLevel, sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_oldFrontier, oldFrontier, sizeof(bool) * (NUM_NODES / world_size) , cudaMemcpyHostToDevice);
-
-
-        CUDA_BFS_KERNEL <<<blocks, threads >>>(d_vertices, d_edges, d_oldFrontier, d_newFrontier,
-                                               d_visited, d_levels, d_currentLevel, d_done, d_NUM_NODES);
-
-
-        cudaMemcpy(&done, d_done , sizeof(bool), cudaMemcpyDeviceToHost);
-
-
-        cudaMemcpy(newFrontier, d_newFrontier, sizeof(bool) * (NUM_NODES / world_size), cudaMemcpyDeviceToHost);
-
-
-        for(i=0; i < (NUM_NODES); i++){
-            printf("new frontier values [%d]: %d\n",i, newFrontier[i]);
-
-            oldFrontier[i] = false;
-            if(newFrontier[i] == true){
-                oldFrontier[i] = true;
-                newFrontier[i] = false;
-            }
-
-        }
-        currentLevel++;
         }
      } while (!done);
 
