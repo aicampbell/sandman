@@ -1,0 +1,79 @@
+world_rank: 0
+old frontier values [0]: 1
+old frontier values [1]: 0
+old frontier values [2]: 0
+old frontier values [3]: 0
+old frontier values [4]: 0
+old frontier values [5]: 0
+Node order: 0 
+GPU LEvel: 0
+done: 0
+new frontier values [0]: 0
+new frontier values [1]: 1
+new frontier values [2]: 1
+new frontier values [3]: 1
+new frontier values [4]: 0
+new frontier values [5]: 0
+Process 0 : old frontier values [0]: 0
+Process 0 : old frontier values [1]: 1
+Process 0 : old frontier values [2]: 1
+Node order: 1 
+Node order: 2 
+GPU LEvel: 1
+GPU LEvel: 1
+done: 1
+Process 0 : sub new frontier values [0]: 0
+Process 0 : sub new frontier values [1]: 0
+Process 0 : sub new frontier values [2]: 0
+world_rank: 1
+Process 1 : old frontier values [0]: 1
+Process 1 : old frontier values [1]: 0
+Process 1 : old frontier values [2]: 0
+Node order: 0 
+GPU LEvel: 1
+done: 1
+Process 1 : sub new frontier values [0]: 0
+Process 1 : sub new frontier values [1]: 1
+Process 1 : sub new frontier values [2]: 1
+PROCESS 0 : Done: 1
+GlobalDone: 1
+new frontier values [0]: 0
+new frontier values [1]: 0
+new frontier values [2]: 0
+new frontier values [3]: 0
+new frontier values [4]: 1
+new frontier values [5]: 1
+Process 0 : END old frontier values [0]: 0
+Process 0 : END old frontier values [1]: 0
+Process 0 : END old frontier values [2]: 0
+Process 0 : END old frontier values [3]: 0
+Process 0 : END old frontier values [4]: 1
+Process 0 : END old frontier values [5]: 1
+PROCESS 1 : Done: 1
+GlobalDone: 1
+Process 1 : END old frontier values [0]: 0
+Process 1 : END old frontier values [1]: 0
+Process 1 : END old frontier values [2]: 0
+Process 1 : END old frontier values [3]: 0
+Process 1 : END old frontier values [4]: 0
+Process 1 : END old frontier values [5]: 0
+Number of times the kernel is called : 2 
+
+Level:
+node 0 cost: 1
+node 1 cost: -1
+Number of times the kernel is called : 2 
+
+Level:
+node 0 cost: 0
+node 1 cost: 1
+node 2 cost: 1
+node 3 cost: -1
+node 4 cost: -1
+node 5 cost: -1
+
+node 2 cost: -1
+node 3 cost: -1
+node 4 cost: -1
+node 5 cost: -1
+
