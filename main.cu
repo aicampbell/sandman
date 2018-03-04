@@ -4,17 +4,11 @@
 #include "bfs/bfs.h"
 
 int controlData[800][2];
-int maxNodes, maxEdges;
+int maxNodes, maxEdges, r, i;
 
-int readInputFile(){
+void readInputFile(){
     FILE *f;
     f = fopen("chesapeak-sorted.mtx", "r");
-    if (f == NULL)
-        return 0;
-
-    int r;
-    int i = 0;
-
 
     fscanf(f, "%d %d %d", &maxNodes, &r, &maxEdges);
     printf("%d %d %d\n", maxNodes, r, maxEdges);
@@ -38,7 +32,7 @@ void convertToCSR(int source, int maxNodes, int maxEdges, int nodes[], int edges
 
         for (j = 0; j <= maxEdges; j++) {
             if (i == controlData[j][0]) {
-                //Sets edges[0] to the first position
+               //Sets edges[0] to the first position
                 edges[edge] = controlData[j][1];
                 edge++;
                 currentPos++;
@@ -47,7 +41,7 @@ void convertToCSR(int source, int maxNodes, int maxEdges, int nodes[], int edges
                     if (nodes[i + 1] < 0) {
                         nodes[i + 1] = 0;
                     }
-                    nodes[i + 1] = currentPos;
+                   nodes[i + 1] = currentPos;
                 }
                     //Last node so just max edges - second last node value
                 else {
