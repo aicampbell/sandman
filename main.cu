@@ -65,7 +65,7 @@ int getDegree(int vertex){
     if(nodes[vertex] == -1){
         return 0;
     }
-    if(vertex < maxNodes){
+    else if(vertex < maxNodes){
         return nodes[vertex +1] - nodes[vertex];
     }
     else if(vertex == maxNodes){
@@ -76,14 +76,14 @@ int getDegree(int vertex){
     }
 }
 
-void partitionByDestination(int *vertices, int numPartitions, int source){
+void partitionByDestination(int *vertices, int numPartitions){
     int averageDeg = maxEdges / numPartitions;
     printf("averageDeg Per Partition: %d\n", averageDeg);
 
     partitionEdges = (int *)malloc(numPartitions * sizeof(int));
     size = (int *)malloc(numPartitions * sizeof(int));
 
-    int p = 0;
+    int p;
     for(p=0; p < numPartitions; p++){
         partitionEdges[p] = 0;
     }
@@ -141,6 +141,7 @@ int main() {
 
 
         partitionByDestination(nodes, world_size, source);
+        //Sizes can be used to determine starting position for each process
 
         printf("Sizes\n");
         for(i =0; i < world_size; i++){
@@ -153,4 +154,10 @@ int main() {
             printf("%d  %d\n", i, partitionEdges[i]);
         }
     }
+
+    //broadcast all sources to all processes
+    //send edgesPerPartiton to the correct Process
+    //Each process call kernel
+    //End of kernel,  all to all?
+    //For levels, need to take min of each value
 }
