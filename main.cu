@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include "bfs/bfs.h"
+#include "bfs/bfsSingle.cu"
 #include <mpi.h>
 
 int controlData[800][2];
@@ -11,10 +11,11 @@ int *nodes;
 int *partitionSizes;
 int *partitionEdges;
 int *size;
+int *starts;
 
 void readInputFile(){
     FILE *f;
-    f = fopen("chesapeak-sorted.mtx", "r");
+    f = fopen("test-sm.mtx", "r");
 
     fscanf(f, "%d %d %d", &maxNodes, &r, &maxEdges);
     printf("%d %d %d\n", maxNodes, r, maxEdges);
@@ -24,6 +25,15 @@ void readInputFile(){
         i++;
     }
 
+}
+
+void computeStarts(int numPartitions, int* partitionEdges){
+    int i;
+    int startID = 0;
+    for(i = 0; i < numPartitions; i++){
+        starts[i] = startID;
+        startID += partitionEdges[i+1];
+    }
 }
 
 void convertToCSR(int source, int maxNodes, int maxEdges, int nodes[], int edges[]) {
@@ -62,10 +72,7 @@ void convertToCSR(int source, int maxNodes, int maxEdges, int nodes[], int edges
 
 int getDegree(int vertex){
 
-    if(nodes[vertex] == -1){
-        return 0;
-    }
-    else if(vertex < maxNodes){
+    if(vertex < maxNodes){
         return nodes[vertex +1] - nodes[vertex];
     }
     else if(vertex == maxNodes){
@@ -73,6 +80,7 @@ int getDegree(int vertex){
     }
     else{
         return -1;
+
     }
 }
 
@@ -80,7 +88,6 @@ void partitionByDestination(int *vertices, int numPartitions){
     int averageDeg = maxEdges / numPartitions;
     printf("averageDeg Per Partition: %d\n", averageDeg);
 
-    partitionEdges = (int *)malloc(numPartitions * sizeof(int));
     size = (int *)malloc(numPartitions * sizeof(int));
 
     int p;
@@ -100,6 +107,7 @@ void partitionByDestination(int *vertices, int numPartitions){
             size[current] = 0;
         }
     }
+    computeStarts(numPartitions, partitionEdges);
 }
 
 int main() {
@@ -111,6 +119,7 @@ int main() {
 
     int world_rank;
     int world_size;
+    int* localEdges;
 
     MPI_Init(NULL, NULL);
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
@@ -118,6 +127,10 @@ int main() {
 
     nodes = (int *)malloc(maxNodes * sizeof(int));
     partitionSizes = (int *)malloc(world_size * sizeof(int));
+    starts = (int *)malloc(world_size * sizeof(int));
+
+    partitionEdges = (int *)malloc(world_size * sizeof(int));
+
 
     int edges[maxEdges];
     int edge = 0;
@@ -125,38 +138,50 @@ int main() {
 
     if(world_rank == 0){
         for (i = 0; i <= maxNodes; i++) {
-            nodes[i] = -1;
+            nodes[i] = 0;
         }
 
         convertToCSR(source, maxNodes, maxEdges, nodes, edges);
 
         printf("\n");
-        printf("\n");
-        printf("Vertices:\n");
-        for(i =0; i <= maxNodes; i++){
-            printf("%d  %d\n", i, nodes[i]);
-        }
 
-        printf("Num degrees: vertex 11: %d\n", getDegree(38));
-
-
-        partitionByDestination(nodes, world_size, source);
+        partitionByDestination(nodes, world_size);
         //Sizes can be used to determine starting position for each process
 
-        printf("Sizes\n");
-        for(i =0; i < world_size; i++){
-            printf("%d  %d\n", i, size[i]);
-        }
-
-        printf("\n");
-        printf("partitionEdges\n");
-        for(i =0; i < world_size; i++){
-            printf("%d  %d\n", i, partitionEdges[i]);
-        }
     }
 
-    //broadcast all sources to all processes
+    //broadcast all sources, partitionEdges to all processes
+    MPI_Bcast(nodes, maxNodes +1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(partitionEdges, world_size, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(starts, world_size, MPI_INT, 0, MPI_COMM_WORLD);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    localEdges = (int *)malloc(200 * sizeof(int));
+
+
     //send edgesPerPartiton to the correct Process
+    if(world_rank == 0){
+       for(i = 1; i < world_size; i++){
+            MPI_Send(edges + starts[i], partitionEdges[i], MPI_INT, i, 0, MPI_COMM_WORLD);
+       }
+       for(i =0; i < partitionEdges[0]; i++){
+            localEdges[i] = edges[i];
+       }
+       printf("PRocess: %d, Partition Edges %d\n",world_rank, partitionEdges[world_rank] );
+    }
+    else{
+        printf("PRocess: %d, Partition Edges %d\n",world_rank, partitionEdges[world_rank] );
+        MPI_Recv(localEdges, partitionEdges[world_rank], MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+
+
+    printf("Process %d: starting value %d\n", world_rank, localEdges[0]);
+
+    //test(world_rank);
+    distributedBFS(nodes, localEdges, 5, maxEdges, world_rank, world_size, 0);
+
+
     //Each process call kernel
     //End of kernel,  all to all?
     //For levels, need to take min of each value
