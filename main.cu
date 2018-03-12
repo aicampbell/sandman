@@ -40,34 +40,22 @@ void convertToCSR(int source, int maxNodes, int maxEdges, int nodes[], int edges
     int i;
     int j;
     int edge = 0;
-    int currentPos = 0;
-    for (i = source; i <= maxNodes; i++) {
-        if (i == source) {
-            nodes[i] = currentPos;
-        }
+
+    for (i = 0; i < maxNodes; i++) {
+
+            nodes[i] = edge;
+
 
         for (j = 0; j <= maxEdges; j++) {
             if (i == controlData[j][0]) {
                //Sets edges[0] to the first position
                 edges[edge] = controlData[j][1];
                 edge++;
-                currentPos++;
-
-                if (i < maxNodes) {
-                    if (nodes[i + 1] < 0) {
-                        nodes[i + 1] = 0;
-                    }
-                   nodes[i + 1] = currentPos;
-                }
-                    //Last node so just max edges - second last node value
-                else {
-                    if (nodes[i] < 0) {
-                        nodes[i] = currentPos;
-                    }
-                }
-            }
+             }
         }
     }
+    assert( maxEdges == edge);
+    nodes[maxNodes] = maxEdges;
 }
 
 int getDegree(int vertex){
