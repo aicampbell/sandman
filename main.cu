@@ -4,7 +4,7 @@
 #include "bfs/bfsSingle.cu"
 #include <mpi.h>
 
-int controlData[800][2];
+int graph[800][2];
 int maxNodes, maxEdges, r, i;
 
 int *nodes;
@@ -13,15 +13,15 @@ int *partitionEdges;
 int *size;
 int *starts;
 
-void readInputFile(){
+void readInputFile(char* file){
     FILE *f;
-    f = fopen("test-sm.mtx", "r");
+    f = fopen(file, "r");
 
     fscanf(f, "%d %d %d", &maxNodes, &r, &maxEdges);
     printf("%d %d %d\n", maxNodes, r, maxEdges);
 
 
-    while ((fscanf(f, "%d %d", &controlData[i][0], &controlData[i][1])) != EOF) {
+    while ((fscanf(f, "%d %d", &graph[i][0], &graph[i][1])) != EOF) {
         i++;
     }
 
@@ -42,19 +42,16 @@ void convertToCSR(int source, int maxNodes, int maxEdges, int nodes[], int edges
     int edge = 0;
 
     for (i = 0; i < maxNodes; i++) {
-
-            nodes[i] = edge;
-
+        nodes[i] = edge;
 
         for (j = 0; j <= maxEdges; j++) {
-            if (i == controlData[j][0]) {
+            if (i == graph[j][0]) {
                //Sets edges[0] to the first position
-                edges[edge] = controlData[j][1];
+                edges[edge] = graph[j][1];
                 edge++;
              }
         }
     }
-    assert( maxEdges == edge);
     nodes[maxNodes] = maxEdges;
 }
 
@@ -98,12 +95,12 @@ void partitionByDestination(int *vertices, int numPartitions){
     computeStarts(numPartitions, partitionEdges);
 }
 
-int main() {
+int main(int argc, char **argv) {
 
 
     int i;
-
-    readInputFile();
+    char* file = argv[1];
+    readInputFile(file);
 
     int world_rank;
     int world_size;
@@ -122,10 +119,10 @@ int main() {
 
     int edges[maxEdges];
     int edge = 0;
-    int source = controlData[0][0];
+    int source = graph[0][0];
 
     if(world_rank == 0){
-        for (i = 0; i <= maxNodes; i++) {
+        for (i = 0; i < maxNodes; i++) {
             nodes[i] = 0;
         }
 
@@ -167,7 +164,7 @@ int main() {
     printf("Process %d: starting value %d\n", world_rank, localEdges[0]);
 
     //test(world_rank);
-    distributedBFS(nodes, localEdges, 5, maxEdges, world_rank, world_size, 0);
+    distributedBFS(nodes, localEdges, maxNodes, maxEdges, world_rank, world_size, 0);
 
 
     //Each process call kernel

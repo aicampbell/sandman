@@ -193,21 +193,16 @@ void sendToGPU(int* vertices, int* edges, int* visited, int* newFrontier, int* l
         cudaMalloc((void**)&d_vertices, sizeof(int) * num_nodes);
         cudaMemcpy(d_vertices, vertices, sizeof(int) * num_nodes, cudaMemcpyHostToDevice);
 
-
         cudaMalloc((void**)&d_edges, sizeof(int) * num_edges);
         cudaMemcpy(d_edges, edges, sizeof(int) * num_edges, cudaMemcpyHostToDevice);
-
 
         cudaMalloc((void**)&d_visited, sizeof(int) * num_nodes);
         cudaMemcpy(d_visited, visited, sizeof(int) * num_nodes, cudaMemcpyHostToDevice);
 
-
         cudaMalloc((void**)&d_oldFrontier, sizeof(int) * num_nodes);
-
 
         cudaMalloc((void**)&d_newFrontier, sizeof(int) * num_nodes);
         cudaMemcpy(d_newFrontier, &newFrontier, sizeof(int) * num_nodes, cudaMemcpyHostToDevice);
-
 
         cudaMalloc((void**)&d_levels, sizeof(int) * num_nodes);
         cudaMemcpy(d_levels, &levels, sizeof(int) * num_nodes, cudaMemcpyHostToDevice);
