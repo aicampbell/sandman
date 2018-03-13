@@ -5,23 +5,24 @@ def readIn():
     col1 = []
     col2 = []
     with open(sys.argv[1]) as a:
-        a.next()
+        d = a.next()
         for line in a:
             b = line.split()
             col1.append(int(b[0])-1)
             col2.append(int(b[1])-1)
-    return col1, col2
+    return col1, col2, d
 
-def writeTo(col1, col2):
+def writeTo(col1, col2, d):
     with open(sys.argv[2], "w+") as b:
+        b.write(d)
         for i in range(len(col1)):
             b.write(str(col1[i]) + " " + str(col2[i]) + "\n") 
     
 
 
 def main():
-    col1, col2 = readIn()
-    writeTo(col1, col2)
+    col1, col2, d = readIn()
+    writeTo(col1, col2,d)
 
 
 
