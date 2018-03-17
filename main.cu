@@ -76,6 +76,25 @@ void convertToCSR(int source, int maxNodes, int maxEdges, int vertices[], int ed
     vertices[maxNodes] = maxEdges;
 }
 
+void convertToCSC(int source, int maxNodes, int maxEdges, int vertices[], int edges[]) {
+    int i;
+    int j;
+    int edge = 0;
+
+    for (i = 0; i < maxNodes; i++) {
+        vertices[i] = edge;
+
+        for (j = 0; j <= maxEdges; j++) {
+            if (i == graph[j][0]) {
+               //Sets edges[0] to the first position
+                edges[edge] = graph[j][1];
+                edge++;
+             }
+        }
+    }
+    vertices[maxNodes] = maxEdges;
+}
+
 int getDegree(int vertex){
 
     if(vertex < maxNodes){
