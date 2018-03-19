@@ -4,3 +4,6 @@ all:
 
 bfsMain:
 	nvcc -ccbin clang-3.8 -I/usr/lib/mpich/include/ -lmpi main.cu -o main
+
+prMain:
+	nvcc -ccbin clang-3.8 -I/usr/lib/mpich/include/ -lmpi mainPR.cu -o mainPR

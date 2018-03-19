@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include "bfs/bfsSingle.cu"
 #include <mpi.h>
 
 int graph[800][2];
@@ -57,7 +56,7 @@ void computeStarts(int numPartitions, int* partitionEdges){
     }
 }
 
-void convertToCSR(int source, int maxNodes, int maxEdges, int vertices[], int edges[]) {
+void convertToCSR(int maxNodes, int maxEdges, int vertices[], int edges[]) {
     int i;
     int j;
     int edge = 0;
@@ -143,7 +142,7 @@ int main(int argc, char **argv) {
         nodes[i] = 0;
     }
 
-    convertToCSR(source, maxNodes, maxEdges, nodes, edges);
+    convertToCSR(maxNodes, maxEdges, nodes, edges);
     printf("\n");
 
     partitionByDestination(nodes, world_size);
@@ -169,12 +168,10 @@ int main(int argc, char **argv) {
         }
     }
 
+    for(i=0; i < maxNodes; i++){
+        printf("%d\n", nodes[i]);
+    }
 
-    printf("Process %d: starting value %d\n", world_rank, localEdges[0]);
-    distributedBFS(nodes, localEdges, maxNodes, maxEdges, world_rank, world_size, 0);
 
-
-    //Each process call kernel
-    //End of kernel,  all to all?
-    //For levels, need to take min of each value
+    //pageRank(nodes, maxNodes, edges, maxEdges);
 }
