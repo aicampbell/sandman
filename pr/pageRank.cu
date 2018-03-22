@@ -20,8 +20,11 @@ int* d_done;
 
 int world_rank;
 int world_size;
+int blocks;
+int threads;
 
-__global__ void CUDA_ITERATE_KERNEL(int* d_vertices, int* d_destinations, int* d_y, int* d_out_degrees, int d_num_vertices){
+
+__global__ void CUDA_ITERATE_KERNEL(int* d_vertices, int* d_destinations, int* d_y, int* d_out_degrees, int* d_num_vertices){
 
     int d = 0.85;
     int i;
@@ -34,7 +37,7 @@ __global__ void CUDA_ITERATE_KERNEL(int* d_vertices, int* d_destinations, int* d
             d_y[i] += d_vertices[id] / d_out_degrees[id];
         }
     }
-    d_y[id] = ((1 - d) / d_num_vertices) + (d * d_y[id]);
+    d_y[id] = ((1 - d) / *d_num_vertices) + (d * d_y[id]);
 }
 
 __global__ void CUDA_WEIGHTS_KERNEL(float* d_weights, int d_weight, int* d_vertices, int d_num_vertices){
@@ -50,37 +53,32 @@ __global__ void CUDA_SCALE_SWAP_KERNEL(float* d_x, float* d_y, int d_weight){
     d_y[id] = 0.f;
 }
 
-__global__ void CUDA_DEGREE_KERNEL(int* d_out_degrees, int* d_vertices, int* d_num_vertices, int* d_num_edges){
-    int id = threadIdx.x + blockIdx.x * blockDim.x;
+void setup(int* vertices, int* destinations, int* out_degrees, int num_vertices, int num_edges){
+    cudaMalloc((void**)&d_vertices, sizeof(int) * num_vertices);
+    cudaMemcpy(d_vertices, vertices, sizeof(int) * num_vertices, cudaMemcpyHostToDevice);
 
-    if(id == *d_num_vertices){
-        d_out_degrees[id] = *d_num_edges - d_vertices[id];
-    }
-    else{
-        d_out_degrees[id] = d_vertices[id+1] - d_vertices[id];
-    }
-}
+    cudaMalloc((void**)&d_destinations, sizeof(int) * num_edges);
+    cudaMemcpy(d_destinations, destinations, sizeof(int) * num_edges, cudaMemcpyHostToDevice);
 
-
-void getDegrees(int* outDegrees, int* vertices, int maxVertices, int maxEdges){
-
-    cudaMalloc((void**)&d_out_degrees, sizeof(int) * maxVertices);
-    cudaMemcpy(d_out_degrees, outDegrees, sizeof(int) * maxVertices, cudaMemcpyHostToDevice);
-
-    cudaMalloc((void**)&d_vertices, sizeof(int) * maxVertices);
-    cudaMemcpy(d_vertices, vertices, sizeof(int) * maxVertices, cudaMemcpyHostToDevice);
-
-    cudaMalloc((void**)&d_num_edges, sizeof(int));
-    cudaMemcpy(d_num_edges, &maxEdges, sizeof(int), cudaMemcpyHostToDevice);
+    cudaMalloc((void**)&d_out_degrees, sizeof(int) * num_vertices);
+    cudaMemcpy(d_out_degrees, out_degrees, sizeof(int) * num_vertices, cudaMemcpyHostToDevice);
 
     cudaMalloc((void**)&d_num_vertices, sizeof(int));
-    cudaMemcpy(d_num_vertices, &maxVertices, sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_num_vertices, &num_vertices, sizeof(int), cudaMemcpyHostToDevice);
 
-    //Call the kernel
-    CUDA_DEGREE_KERNEL <<<1, maxVertices >>>(d_out_degrees, d_vertices, d_num_vertices, d_num_edges);
+    cudaMalloc((void**)&d_num_edges, sizeof(int));
+    cudaMemcpy(d_num_edges, &num_edges, sizeof(int), cudaMemcpyHostToDevice);
+}
 
-    //Transfer the outDegrees Back
-    cudaMemcpy(outDegrees, d_out_degrees, sizeof(int) * maxVertices, cudaMemcpyDeviceToHost);
+void iterate( int* y ){
+
+
+    cudaMalloc((void**)&d_y, sizeof(int) * num_vertices);
+    cudaMemcpy(d_destinations, destinations, sizeof(int) * num_vertices, cudaMemcpyHostToDevice);
+
+
+
+    CUDA_ITERATE_KERNEL <<<blocks, threads >>> (d_vertices, d_destinations, d_y, d_out_degrees, d_num_vertices);
 
 }
 
@@ -113,8 +111,10 @@ float normdiff(float* input, float* output, int length){
     return d;
 }
 
-void pageRank(int* vertices, int maxVertices, int* edges, int maxEdges){
-    int* outDegrees = (int*)malloc(sizeof(int) * maxVertices);
+void pageRank(int* vertices, int maxVertices, int* edges, int maxEdges, int* outDegrees){
+
+    int blocks = 1;
+    int threads = maxVertices;
 
     int maxIterations = 100;
     int iteration = 0;
@@ -122,15 +122,15 @@ void pageRank(int* vertices, int maxVertices, int* edges, int maxEdges){
     float* y;
     float delta = 2;
 
-    //getDegrees(outDegrees, vertices, maxVertices, maxEdges);
+    setup();
 
-    //while(iteration < maxIterations && delta > tol){
+    while(iteration < maxIterations && delta > tol){
 
-    //    //call kernel
-    //    cuda
+        //call iterations
+        iterate();
 
     //    //constants (1-d)v[i] added in separately.
-    //    float weight = 1.0f - sum(y, maxVertices); //ensure y[] sums to 1
+        float weight = 1.0f - sum(y, maxVertices); //ensure y[] sums to 1
     //    CUDA_WEIGHTS_KERNEL();
 
     //    delta = normdiff(x, y, n);

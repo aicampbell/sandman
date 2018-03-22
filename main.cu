@@ -8,6 +8,7 @@ int graph[800][2];
 int maxNodes, maxEdges, r, i;
 
 int *nodes;
+int *edges;
 int *partitionSizes;
 int *partitionEdges;
 int *size;
@@ -64,11 +65,13 @@ void convertToCSR(int source, int maxNodes, int maxEdges, int vertices[], int ed
 
     for (i = 0; i < maxNodes; i++) {
         vertices[i] = edge;
+        printf("new vertex value: %d\n", edge);
 
-        for (j = 0; j <= maxEdges; j++) {
+        for (j = 0; j < maxEdges; j++) {
             if (i == graph[j][0]) {
                //Sets edges[0] to the first position
                 edges[edge] = graph[j][1];
+                printf("new edge value: %d\n", edge);
                 edge++;
              }
         }
@@ -130,12 +133,12 @@ int main(int argc, char **argv) {
     readInputFile(file);
 
     nodes = (int *)malloc(maxNodes * sizeof(int));
+    edges = (int *)malloc(maxEdges * sizeof(int));
     partitionSizes = (int *)malloc(world_size * sizeof(int));
     starts = (int *)malloc(world_size * sizeof(int));
 
     partitionEdges = (int *)malloc(world_size * sizeof(int));
 
-    int edges[maxEdges];
     int edge = 0;
     int source = graph[0][0];
 
@@ -147,7 +150,6 @@ int main(int argc, char **argv) {
     printf("\n");
 
     partitionByDestination(nodes, world_size);
-    //Sizes can be used to determine starting position for each process
 
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -169,12 +171,5 @@ int main(int argc, char **argv) {
         }
     }
 
-
-    printf("Process %d: starting value %d\n", world_rank, localEdges[0]);
     distributedBFS(nodes, localEdges, maxNodes, maxEdges, world_rank, world_size, 0);
-
-
-    //Each process call kernel
-    //End of kernel,  all to all?
-    //For levels, need to take min of each value
 }

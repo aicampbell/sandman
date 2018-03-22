@@ -1,12 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "pr/pageRank.cu"
 #include <mpi.h>
 
 int graph[800][2];
 int maxNodes, maxEdges, r, i;
 
 int *nodes;
+int *edges;
+int *outDegrees;
 int *partitionSizes;
 int *partitionEdges;
 int *size;
@@ -64,10 +67,10 @@ void convertToCSR(int maxNodes, int maxEdges, int vertices[], int edges[]) {
     for (i = 0; i < maxNodes; i++) {
         vertices[i] = edge;
 
-        for (j = 0; j <= maxEdges; j++) {
-            if (i == graph[j][0]) {
+        for (j = 0; j < maxEdges; j++) {
+            if (i == graph[j][1]) {
                //Sets edges[0] to the first position
-                edges[edge] = graph[j][1];
+                edges[edge] = graph[j][0];
                 edge++;
              }
         }
@@ -75,22 +78,25 @@ void convertToCSR(int maxNodes, int maxEdges, int vertices[], int edges[]) {
     vertices[maxNodes] = maxEdges;
 }
 
-int getDegree(int vertex){
+void getDegrees(){
 
-    if(vertex < maxNodes){
-        return nodes[vertex +1] - nodes[vertex];
-    }
-    else if(vertex == maxNodes){
-        return maxEdges - nodes[vertex];
-    }
-    else{
-        return -1;
+    for(i=0; i <= maxNodes; i++){
+        if(i < maxNodes){
+            outDegrees[i] = nodes[i +1] - nodes[i];
+        }
+        else if(i == maxNodes){
+            outDegrees[i] = maxEdges - nodes[i];
+        }
+        else{
+            outDegrees[i] = -1;
+        }
     }
 }
 
-void partitionByDestination(int *vertices, int numPartitions){
+void partitionByDestination(int *vertices, int* outDegrees, int numPartitions){
     int averageDeg = maxEdges / numPartitions;
     printf("averageDeg Per Partition: %d\n", averageDeg);
+
 
     size = (int *)malloc(numPartitions * sizeof(int));
 
@@ -104,7 +110,7 @@ void partitionByDestination(int *vertices, int numPartitions){
 
     int v;
     for(v = 0; v <= maxNodes; v++){
-        partitionEdges[current] += getDegree(v);
+        partitionEdges[current] += outDegrees[v];
         size[current] +=1;
         if(partitionEdges[current] >= averageDeg && current < numPartitions -1){
             current++;
@@ -129,12 +135,13 @@ int main(int argc, char **argv) {
     readInputFile(file);
 
     nodes = (int *)malloc(maxNodes * sizeof(int));
+    outDegrees = (int *)malloc(maxNodes * sizeof(int));
+    edges = (int *)malloc(maxEdges * sizeof(int));
     partitionSizes = (int *)malloc(world_size * sizeof(int));
     starts = (int *)malloc(world_size * sizeof(int));
 
     partitionEdges = (int *)malloc(world_size * sizeof(int));
 
-    int edges[maxEdges];
     int edge = 0;
     int source = graph[0][0];
 
@@ -145,9 +152,11 @@ int main(int argc, char **argv) {
     convertToCSR(maxNodes, maxEdges, nodes, edges);
     printf("\n");
 
-    partitionByDestination(nodes, world_size);
-    //Sizes can be used to determine starting position for each process
+    //Calculate outward degrees for each vertex
+    getDegrees();
 
+    //Partition
+    partitionByDestination(nodes, outDegrees, world_size);
 
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -169,9 +178,8 @@ int main(int argc, char **argv) {
     }
 
     for(i=0; i < maxNodes; i++){
-        printf("%d\n", nodes[i]);
+        printf("Degrees: %d\n", outDegrees[i]);
     }
 
-
-    //pageRank(nodes, maxNodes, edges, maxEdges);
+    pageRank(nodes, maxNodes, edges, maxEdges, outDegrees);
 }
