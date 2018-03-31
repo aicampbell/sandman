@@ -56,8 +56,6 @@ __global__ void CUDA_ITERATE_KERNEL(int* d_vertices, int* d_destinations, double
         for(i = d_vertices[id]; i < d_vertices[id +1]; i++){
             s = d_destinations[i];
 
-            printf("s: %d\n", s);
-
             // new result += previous values / number of out degrees
             sum += d * d_x[s] / d_out_degrees[s];
         }
@@ -65,7 +63,6 @@ __global__ void CUDA_ITERATE_KERNEL(int* d_vertices, int* d_destinations, double
         sum += (1 - d) / *d_num_vertices;
 
         d_y[id] = sum;
-        printf("d_y[%d]: %.5f\n", id, d_y[id]);
     }
 }
 
@@ -135,8 +132,6 @@ float sum(double* array, int length){
         err = tmp - sum;
         err += y;
     }
-    printf("SUM: %.5f\n", sum);
-    printf("ERR: %.5f\n", err);
     return sum;
 }
 
@@ -160,8 +155,8 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
     blocks = 1;
     threads = num_vertices;
 
-    int maxIterations = 50;
-    int iteration = 0;
+    int maxIterations = 100;
+    int iteration = 1;
     double tol = 0.0000005;
     double* x = (double *) malloc(num_vertices * sizeof(double));
     double* y = (double *) malloc(num_vertices * sizeof(double));
@@ -171,18 +166,8 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
 
     while(iteration < maxIterations && delta > tol){
 
-        printf("Iteration: %d\n", iteration);
-
         //call iterations
         iterate(x, y, num_vertices);
-
-        printf("y[0] = %.5f\n", y[0]);
-        printf("y[1] = %.5f\n", y[1]);
-        printf("y[2] = %.5f\n", y[2]);
-        printf("y[3] = %.5f\n", y[3]);
-
-
-        //printf("WEIGHTS\n");
 
         //constants (1-d)v[i] added in separately.
         double weight = 1.0f - sum(y, num_vertices); //ensure y[] sums to 1
@@ -191,13 +176,8 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         CUDA_WEIGHTS_KERNEL<<<blocks, threads>>>(d_y, d_weight, d_num_vertices);
         cudaMemcpy(y, d_y, sizeof(double) * num_vertices, cudaMemcpyDeviceToHost);
 
-        printf("y[0] = %.5f\n", y[0]);
-        printf("y[1] = %.5f\n", y[1]);
-        printf("y[2] = %.5f\n", y[2]);
-        printf("y[3] = %.5f\n", y[3]);
-
         delta = normdiff(x, y, num_vertices);
-        printf("Delta: %1f\n", delta);
+        printf("Iteration: %d - Delta: %1f\n", iteration, delta);
 
         //rescale to unit length
 
@@ -207,26 +187,18 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         cudaMemcpy(x, d_x, sizeof(double) * num_vertices, cudaMemcpyDeviceToHost);
         cudaMemcpy(y, d_y, sizeof(double) * num_vertices, cudaMemcpyDeviceToHost);
 
-        printf("After swap\n");
-
-        printf("x[0] = %.5f\n", x[0]);
-        printf("x[1] = %.5f\n", x[1]);
-        printf("x[2] = %.5f\n", x[2]);
-        printf("x[3] = %.5f\n", x[3]);
-
-        printf("y[0] = %.5f\n", y[0]);
-        printf("y[1] = %.5f\n", y[1]);
-        printf("y[2] = %.5f\n", y[2]);
-        printf("y[3] = %.5f\n", y[3]);
-
         iteration++;
     }
 
     if(delta > tol){
+        printf("\n");
         printf("No convergence\n");
     }
     else{
-        printf("Convergence Mofo at iteration\n");
+        printf("\n");
+        printf("Convergence at iteration %d \n", iteration - 1);
+        printf("\n");
+        printf("Values:\n");
 
         int i;
         for(i =0; i < num_vertices; i++){
