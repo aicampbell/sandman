@@ -60,20 +60,16 @@ __global__ void CUDA_ITERATE_KERNEL(int* d_vertices, int* d_destinations, double
 
             // new result += previous values / number of out degrees
             sum += d * d_x[s] / d_out_degrees[s];
-
-             //printf("x[%d]: %.5f\n", s, d_x[s]);
-             //printf("outDegree[%d]: %d\n", s, d_out_degrees[s]);
         }
 
         sum += (1 - d) / *d_num_vertices;
 
         d_y[id] = sum;
+        printf("d_y[%d]: %.5f\n", id, d_y[id]);
     }
 }
 
 __global__ void CUDA_WEIGHTS_KERNEL(double* d_y, double* d_weight, int* d_num_vertices){
-
-    printf("Weight %1f\n", *d_weight);
 
     int id = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -164,7 +160,7 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
     blocks = 1;
     threads = num_vertices;
 
-    int maxIterations = 100;
+    int maxIterations = 50;
     int iteration = 0;
     double tol = 0.0000005;
     double* x = (double *) malloc(num_vertices * sizeof(double));
@@ -180,26 +176,20 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         //call iterations
         iterate(x, y, num_vertices);
 
-        printf("x[0] = %.5f\n", x[0]);
-        printf("x[1] = %.5f\n", x[1]);
-        printf("x[2] = %.5f\n", x[2]);
-        printf("x[3] = %.5f\n", x[3]);
+        printf("y[0] = %.5f\n", y[0]);
+        printf("y[1] = %.5f\n", y[1]);
+        printf("y[2] = %.5f\n", y[2]);
+        printf("y[3] = %.5f\n", y[3]);
 
 
         //printf("WEIGHTS\n");
 
         //constants (1-d)v[i] added in separately.
         double weight = 1.0f - sum(y, num_vertices); //ensure y[] sums to 1
-        printf("Weight : %.5f\n", weight);
 
         cudaMemcpy(d_weight, &weight, sizeof(double), cudaMemcpyHostToDevice);
         CUDA_WEIGHTS_KERNEL<<<blocks, threads>>>(d_y, d_weight, d_num_vertices);
         cudaMemcpy(y, d_y, sizeof(double) * num_vertices, cudaMemcpyDeviceToHost);
-
-        //printf("x[0] = %.5f\n", x[0]);
-        //printf("x[1] = %.5f\n", x[1]);
-        //printf("x[2] = %.5f\n", x[2]);
-        //printf("x[3] = %.5f\n", x[3]);
 
         printf("y[0] = %.5f\n", y[0]);
         printf("y[1] = %.5f\n", y[1]);
@@ -236,7 +226,7 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         printf("No convergence\n");
     }
     else{
-        printf("Convergence Mofo\n");
+        printf("Convergence Mofo at iteration\n");
 
         int i;
         for(i =0; i < num_vertices; i++){
