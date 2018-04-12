@@ -31,6 +31,13 @@ int world_size;
 int blocks;
 int threads;
 
+void log(double* x, int num_vertices){
+    int i;
+    for(i=0; i < num_vertices; i++){
+        printf("x[%d] = %1f\n", i, x[i]);
+    }
+}
+
 __global__ void CUDA_INIT_PR_VALUES(double* d_x, int* d_num_vertices){
     int id = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -56,10 +63,12 @@ __global__ void CUDA_ITERATE_KERNEL(int* d_vertices, int* d_destinations, double
         for(i = d_vertices[id]; i < d_vertices[id +1]; i++){
             s = d_destinations[i];
 
-            // new result += previous values / number of out degrees
-            sum += d * d_x[s] / d_out_degrees[s];
+            if(d_out_degrees[s] != 0){
+                // new result += previous values / number of out degrees
+                sum += d * d_x[s] / d_out_degrees[s];
+            }
         }
-
+        //Likely need to add this outside of kernel when using MPI. Talk with Hans as this is constant
         sum += (1 - d) / *d_num_vertices;
 
         d_y[id] = sum;
@@ -150,6 +159,8 @@ float normdiff(double* input, double* output, int length){
     return d;
 }
 
+
+
 void pageRank(int* vertices, int num_vertices, int* destinations, int num_destinations, int* outDegrees){
 
     blocks = 1;
@@ -166,10 +177,19 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
 
     while(iteration < maxIterations && delta > tol){
 
+        log(y, num_vertices);
         //call iterations
         iterate(x, y, num_vertices);
 
-        //constants (1-d)v[i] added in separately.
+        /**
+        * Use MPI reduction here to do summation.
+        * Then loop through and add  "sum += (1 - d) / *d_num_vertices;"
+        *
+        */
+
+        //log(x, num_vertices);
+
+
         double weight = 1.0f - sum(y, num_vertices); //ensure y[] sums to 1
 
         cudaMemcpy(d_weight, &weight, sizeof(double), cudaMemcpyHostToDevice);
@@ -180,7 +200,6 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         printf("Iteration: %d - Delta: %1f\n", iteration, delta);
 
         //rescale to unit length
-
         weight = 1.0f / sum(y, num_vertices);
         cudaMemcpy(d_weight, &weight, sizeof(double), cudaMemcpyHostToDevice);
         CUDA_SCALE_SWAP_KERNEL<<<blocks, threads>>>(d_x, d_y, d_weight);
