@@ -4,7 +4,7 @@
 #include "bfs/bfsSingle.cu"
 #include <mpi.h>
 
-int graph[800][2];
+int **graph;
 int maxNodes, maxEdges, r, i;
 
 int *nodes;
@@ -129,6 +129,12 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     int i;
+    graph = (int**) malloc(sizeof(int*) * 8000000);
+    for(i=0; i < 8000000; i++){
+        graph[i] = (int*) malloc(sizeof(int) * 2 );
+    }
+
+
     char* file = argv[1];
     readInputFile(file);
 
