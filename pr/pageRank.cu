@@ -74,6 +74,7 @@ __global__ void CUDA_ITERATE_KERNEL(int* d_vertices, int* d_destinations, double
         d_y[id] = sum;
     }
 }
+//Do ALL to all after this
 
 __global__ void CUDA_WEIGHTS_KERNEL(double* d_y, double* d_weight, int* d_num_vertices){
 
