@@ -25,6 +25,7 @@ void readInputFile(char* file){
     while ((fscanf(f, "%d %d", &graph[i][0], &graph[i][1])) != EOF) {
         i++;
     }
+    printf("Graph loaded\n");
 }
 
 int getMaxLocalEdgesSize(int numPartitions){
@@ -58,24 +59,30 @@ void computeStarts(int numPartitions, int* partitionEdges){
     }
 }
 
-void convertToCSR(int source, int maxNodes, int maxEdges, int vertices[], int edges[]) {
+void convertToCSR(int source, int maxNodes, int maxEdges, int* vertices, int* edges, int** graph) {
     int i;
     int j;
     int edge = 0;
+    int* test = (int *)malloc(maxEdges * sizeof(int));
 
     for (i = 0; i < maxNodes; i++) {
         vertices[i] = edge;
-        printf("new vertex value: %d\n", edge);
 
         for (j = 0; j < maxEdges; j++) {
             if (i == graph[j][0]) {
                //Sets edges[0] to the first position
                 edges[edge] = graph[j][1];
-                printf("new edge value: %d\n", edge);
+                test[edge] = graph[j][1];
                 edge++;
-             }
+            }
         }
     }
+    printf("test[0] from method: %d\n", test[0]);
+
+    printf("vertices[0] from method: %d\n", vertices[0]);
+    printf("Graph[0][1] from method: %d\n", graph[0][1]);
+
+    printf("edges[0] from method: %d\n", edges[0]);
     vertices[maxNodes] = maxEdges;
 }
 
@@ -83,9 +90,6 @@ int getDegree(int vertex){
 
     if(vertex < maxNodes){
         return nodes[vertex +1] - nodes[vertex];
-    }
-    else if(vertex == maxNodes){
-        return maxEdges - nodes[vertex];
     }
     else{
         return -1;
@@ -107,7 +111,7 @@ void partitionByDestination(int *vertices, int numPartitions){
     size[0] = 0;
 
     int v;
-    for(v = 0; v <= maxNodes; v++){
+    for(v = 0; v < maxNodes + 1; v++){
         partitionEdges[current] += getDegree(v);
         size[current] +=1;
         if(partitionEdges[current] >= averageDeg && current < numPartitions -1){
@@ -129,8 +133,9 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     int i;
-    graph = (int**) malloc(sizeof(int*) * 8000000);
-    for(i=0; i < 8000000; i++){
+    int  num_rows = 30000;
+    graph = (int**) malloc(sizeof(int*) * num_rows);
+    for(i=0; i < num_rows; i++){
         graph[i] = (int*) malloc(sizeof(int) * 2 );
     }
 
@@ -138,7 +143,7 @@ int main(int argc, char **argv) {
     char* file = argv[1];
     readInputFile(file);
 
-    nodes = (int *)malloc(maxNodes * sizeof(int));
+    nodes = (int *)malloc(maxNodes + 1 * sizeof(int));
     edges = (int *)malloc(maxEdges * sizeof(int));
     partitionSizes = (int *)malloc(world_size * sizeof(int));
     starts = (int *)malloc(world_size * sizeof(int));
@@ -152,9 +157,22 @@ int main(int argc, char **argv) {
         nodes[i] = 0;
     }
 
-    convertToCSR(source, maxNodes, maxEdges, nodes, edges);
+    printf("source value: %d\n", source);
+    //printf("i value: %d\n", &graph[0][0]);
+
+    printf("CSR\n");
+    convertToCSR(source, maxNodes, maxEdges, nodes, edges, graph);
     printf("\n");
 
+    for(i = 0; i < 30; i++){
+        printf("vertex[%d]: %d\n", i, nodes[i]);
+    }
+
+    for(i = 0; i < 30; i++){
+            printf("edges[%d]: %d\n", i, edges[i]);
+        }
+
+    printf("Partitioning by dest");
     partitionByDestination(nodes, world_size);
 
 
@@ -176,6 +194,7 @@ int main(int argc, char **argv) {
             localEdges[i] = edges[i];
         }
     }
-
-    distributedBFS(nodes, localEdges, maxNodes, maxEdges, world_rank, world_size, 0);
+    printf("Calling bfs gpu\n");
+    //printf("");
+    //distributedBFS(nodes, localEdges, maxNodes, maxEdges, world_rank, world_size, source);
 }
