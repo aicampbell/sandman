@@ -42,18 +42,15 @@ __global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, int* d_oldFrontie
 
     if (d_oldFrontier[id] == 1 && d_visited[id] == 1){
         printf("Node order: %d \n", id); //This printf gives the order of vertices in BFS
-        printf("From the gpu\n");
 
         d_levels[id] = *d_currentLevel; //set the level of the current node
 
         int start = d_vertices[id];
         int end = d_vertices[id + 1];
 
-        printf("Id: %d -Start %d\n", id, start);
-        printf("Id: %d - End %d\n", id, end);
         for(i = start; i < end; i++){
             int nid = d_edges[i];
-            printf("GPU Nid: %d\n", d_edges[i]);
+            //printf("GPU Nid: %d\n", d_edges[i]);
             if(d_visited[nid] == false){
                 d_visited[nid] = 1;
                 d_newFrontier[nid] = 1;
@@ -112,9 +109,9 @@ void sendToGPU(int* vertices, int* edges, int* visited, int* newFrontier, int* l
 
 void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int world_rank, int world_size, int source){
 
+    int* globalLevels;
     int* levels = (int *)malloc(num_nodes * sizeof(int));
     int* visited = (int *)malloc(num_nodes * sizeof(int));
-
     int* oldFrontier = (int *)malloc(num_nodes * sizeof(int));
     int* newFrontier = (int *)malloc(num_nodes * sizeof(int));
     int currentLevel = 0;
@@ -135,16 +132,16 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
     sendToGPU(vertices, edges, visited, newFrontier, levels, num_nodes, num_edges, world_size, world_rank);
 
     //Allocate sub arrays for MPI
-     int* subOldFrontier = (int *)malloc((elementsPerProc + 1) * sizeof(int));
-     int* subNewFrontier = (int *)malloc((elementsPerProc + 1) * sizeof(int));
+    int* subOldFrontier = (int *)malloc((elementsPerProc + 1) * sizeof(int));
+    int* subNewFrontier = (int *)malloc((elementsPerProc + 1) * sizeof(int));
 
-     for(i=0; i < elementsPerProc; i++){
-        subOldFrontier[i] = 0;
-        subNewFrontier[i] = 0;
-     }
+    for(i=0; i < elementsPerProc; i++){
+       subOldFrontier[i] = 0;
+       subNewFrontier[i] = 0;
+    }
 
-    int threads = 1000;
-    int blocks = (num_nodes / 1000) + 1;
+    int threads = 1024;
+    int blocks = 8;
 
     int done;
     int globalDone;
@@ -164,17 +161,13 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
             cudaMemcpy(d_currentLevel, &currentLevel, sizeof(int), cudaMemcpyHostToDevice);
             cudaMemcpy(d_oldFrontier, oldFrontier, sizeof(int) * num_nodes, cudaMemcpyHostToDevice);
 
-           for(i=0; i < 40; i++){
-               //printf("old frontier values [%d]: %d\n",i, oldFrontier[i]);
-           }
-
-           CUDA_BFS_KERNEL <<<blocks, threads >>>(d_vertices, d_edges, d_oldFrontier, d_newFrontier,
+            CUDA_BFS_KERNEL <<<blocks, threads >>>(d_vertices, d_edges, d_oldFrontier, d_newFrontier,
                                             d_visited, d_levels, d_currentLevel, d_done, d_num_nodes, d_num_edges);
 
-           cudaMemcpy(newFrontier, d_newFrontier, sizeof(int) * num_nodes, cudaMemcpyDeviceToHost);
-           cudaMemcpy(&done, d_done , sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(newFrontier, d_newFrontier, sizeof(int) * num_nodes, cudaMemcpyDeviceToHost);
+            cudaMemcpy(&done, d_done , sizeof(int), cudaMemcpyDeviceToHost);
 
-           printf("Done after gpu: %d", done);
+            printf("Done after gpu: %d", done);
 
            for(i=0; i < num_nodes; i++){
                 oldFrontier[i] = 0;
@@ -184,13 +177,9 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
                 }
            }
 
-           printf("\n");
-           for(i=0; i < 40; i++){
-            printf("new frontier values [%d]: %d\n",i, newFrontier[i]);
-              //printf("old frontier values [%d]: %d\n",i, oldFrontier[i]);
-           }
-           currentLevel++;
+            currentLevel++;
         }
+
         MPI_Bcast(&iterations, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Bcast(oldFrontier, num_nodes, MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -214,10 +203,7 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
 
             cudaMemcpy(newFrontier, d_newFrontier, sizeof(int) * num_nodes, cudaMemcpyDeviceToHost);
             cudaMemcpy(&done, d_done , sizeof(int), cudaMemcpyDeviceToHost);
-            printf("Done after gpu: %d\n", done);
-
-            //for(i=0; i < num_nodes; i++)
-               //printf("AFTER COPY Process %d : new frontier values [%d]: %d\n",world_rank, i, newFrontier[i]);
+            cudaMemcpy(levels, d_levels, sizeof(int) * num_nodes, cudaMemcpyDeviceToHost);
 
             MPI_Allreduce(newFrontier, globalNewFrontier, num_nodes, MPI_INT, MPI_LOR, MPI_COMM_WORLD);
 
@@ -226,8 +212,6 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
             printf("GlobalDone: %d\n", globalDone);
 
             for(i=0; i < num_nodes; i++){
-                //printf("new frontier values [%d]: %d\n",i, newFrontier[i]);
-
                 oldFrontier[i] = 0;
                 if(newFrontier[i] == 1){
                     oldFrontier[i] = 1;
@@ -236,23 +220,20 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
             }
             currentLevel++;
         }
+
     } while (globalDone == 0);
-
-    cudaMemcpy(levels, d_levels, sizeof(int) * num_nodes, cudaMemcpyDeviceToHost);
-
-
-    int* globalLevels = (int *)malloc(num_nodes * sizeof(int));
-    //maybe reduce
-    //MPI_Gather(&levels, num_nodes, MPI_INT, globalLevels, num_nodes, MPI_INT, 0,MPI_COMM_WORLD);
 
     if(world_rank == 0){
         printf("Number of times the kernel is called : %d \n", iterations);
+        globalLevels = (int *)malloc(num_nodes * sizeof(int));
     }
+
+    MPI_Reduce(levels, globalLevels, num_nodes, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
 
     if(world_rank == 0){
         printf("\nLevel:\n");
-        for (int i = 0; i<num_nodes; i++){}
-            //printf("Process: %d node %d level: %d\n",world_rank, i, levels[i]);
-        //printf("\n");
+        for (i = 0; i < num_nodes; i++)
+            printf("node %d level: %d\n", i, globalLevels[i]);
+        printf("\n");
     }
 }
