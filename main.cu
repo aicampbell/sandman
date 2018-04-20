@@ -71,7 +71,7 @@ void convertToCSR(int maxNodes, int maxEdges, int* vertices, int** graph) {
     int edge = 0;
     int stop = 0;
 
-    for (i = edge; i <= maxNodes; i++) {
+    for (i = 0; i <= maxNodes; i++) {
 
         vertices[i] = edge;
 
@@ -81,6 +81,7 @@ void convertToCSR(int maxNodes, int maxEdges, int* vertices, int** graph) {
                 assert( graph[j][1] <= maxNodes );
                //Sets edges[0] to the first position
                 edges[edge] = graph[j][1];
+                assert( edges[edge] != -1);
                 edge++;
              } else if(i < graph[j][0]){
                 stop = 1;
@@ -144,7 +145,7 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     int i;
-    int num_rows = 68993780;
+    int num_rows = 30000;
     graph = (int**) malloc(sizeof(int*) * num_rows);
     for(i=0; i < num_rows; i++){
         graph[i] = (int*) malloc(sizeof(int) * 2 );
@@ -201,7 +202,10 @@ int main(int argc, char **argv) {
     }
 
     printf("Calling bfs gpu\n");
+    printf("edges[17684] = %d\n", edges[17684]);
     printf("source: %d\n", source);
 
-    distributedBFS(nodes, localEdges, maxNodes, maxEdges, world_rank, world_size, source);
+    int edgeOffset = starts[world_rank];
+    //Need to pass edge offset
+    distributedBFS(nodes, localEdges, maxNodes, maxEdges, world_rank, world_size, source, edgeOffset);
 }
