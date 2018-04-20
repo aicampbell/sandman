@@ -164,16 +164,23 @@ int main(int argc, char **argv) {
     printf("local size: %d\n", localEdgesSize);
 
     //Added 10 is for safety to make sure enough memory is allocated.
-    localEdges = (int *)malloc((localEdgesSize + 10) * sizeof(int));
-
-    if(world_rank <= world_size -2){
-       for(i = starts[world_rank]; i < maxEdges ; i++){
-            localEdges[i] = edges[i];
+    localEdges = (int *)malloc((localEdgesSize + 1000) * sizeof(int));
+    int offset = 0;
+    if(world_rank < world_size - 1){
+       offset = starts[world_rank];
+       for(i = 0; i < (starts[world_rank + 1] - starts[world_rank]); i++){
+            assert( starts[world_rank + 1] < maxEdges );
+            assert( (starts[world_rank + 1] - starts[world_rank]) < localEdgesSize );
+            localEdges[i] = edges[i + offset];
        }
     }
     else{
-        for(i = starts[world_rank]; i <= maxEdges; i++){
-            localEdges[i] = edges[i];
+        printf("starts: %d\n", starts[world_rank]);
+
+        offset = starts[world_rank];
+        for(i = 0; i < (maxEdges - starts[world_rank]) ; i++){
+           assert( (maxEdges - starts[world_rank]) <= localEdgesSize );
+           localEdges[i] = edges[i + offset];
         }
     }
 

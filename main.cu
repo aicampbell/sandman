@@ -57,8 +57,9 @@ void computeStarts(int numPartitions, int* partitionEdges){
     int i;
     int startID = 0;
     for(i = 0; i < numPartitions; i++){
+
         starts[i] = startID;
-        startID += partitionEdges[i+1];
+        startID += partitionEdges[i];
         assert( startID < maxEdges );
         printf("Start[%d] %d\n", i, starts[i]);
     }
@@ -68,26 +69,31 @@ void convertToCSR(int maxNodes, int maxEdges, int* vertices, int** graph) {
     int i;
     int j;
     int edge = 0;
+    int stop = 0;
 
-    for (i = 0; i <= maxNodes; i++) {
+    for (i = edge; i <= maxNodes; i++) {
+
         vertices[i] = edge;
 
-        for (j = 0; j < maxEdges; j++) {
-            if (i == graph[j][0]) {
+        for (j = edge; j < maxEdges && stop == 0; j++) {
 
+             if (i == graph[j][0]) {
                 assert( graph[j][1] <= maxNodes );
-
                //Sets edges[0] to the first position
                 edges[edge] = graph[j][1];
                 edge++;
-            }
+             } else if(i < graph[j][0]){
+                stop = 1;
+             }
         }
+        stop = 0;
     }
     vertices[maxNodes] = maxEdges;
 }
 
 int getDegree(int vertex){
 
+    //DO NOT DO <=
     if(vertex < maxNodes){
         return nodes[vertex +1] - nodes[vertex];
     }
@@ -121,7 +127,7 @@ void partitionByDestination(int *vertices, int numPartitions){
         }
     }
 
-    for(i=0; i < numPartitions; i++){
+    for(i = 0; i < numPartitions; i++){
         printf( "partition Edge %d = %d\n", i, partitionEdges[i] );
     }
     computeStarts(numPartitions, partitionEdges);
@@ -138,7 +144,7 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     int i;
-    int  num_rows = 30000;
+    int num_rows = 68993780;
     graph = (int**) malloc(sizeof(int*) * num_rows);
     for(i=0; i < num_rows; i++){
         graph[i] = (int*) malloc(sizeof(int) * 2 );
@@ -171,22 +177,25 @@ int main(int argc, char **argv) {
     MPI_Barrier(MPI_COMM_WORLD);
 
     int localEdgesSize = getMaxLocalEdgesSize(world_size);
-    printf("local size: %d\n", localEdgesSize);
+    //printf("local size: %d\n", localEdgesSize);
 
     //Added 10 is for safety to make sure enough memory is allocated.
     localEdges = (int *)malloc((localEdgesSize + 1000) * sizeof(int));
     int offset = 0;
-    if(world_rank <= world_size - 1){
-       for(i = 0; i < starts[world_rank + 1]; i++){
+    if(world_rank < world_size - 1){
+       offset = starts[world_rank];
+       for(i = 0; i < (starts[world_rank + 1] - starts[world_rank]); i++){
             assert( starts[world_rank + 1] < maxEdges );
-            offset = starts[world_rank];
+            assert( (starts[world_rank + 1] - starts[world_rank]) < localEdgesSize );
             localEdges[i] = edges[i + offset];
        }
     }
     else{
         printf("starts: %d\n", starts[world_rank]);
-        for(i = 0; i < maxEdges; i++){
-           offset = starts[world_rank];
+
+        offset = starts[world_rank];
+        for(i = 0; i < (maxEdges - starts[world_rank]) ; i++){
+           assert( (maxEdges - starts[world_rank]) <= localEdgesSize );
            localEdges[i] = edges[i + offset];
         }
     }
