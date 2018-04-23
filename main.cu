@@ -49,7 +49,7 @@ int getMaxLocalEdgesSize(int numPartitions){
         }
         assert( max < maxEdges );
         printf("max size: %d\n", max);
-        return max + 100;
+        return max + 1000;
     }
 }
 
@@ -145,7 +145,8 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     int i;
-    int num_rows = 30000;
+    //int num_rows = 30000;
+    int num_rows = 97890600;
     graph = (int**) malloc(sizeof(int*) * num_rows);
     for(i=0; i < num_rows; i++){
         graph[i] = (int*) malloc(sizeof(int) * 2 );

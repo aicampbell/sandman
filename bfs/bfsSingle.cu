@@ -39,7 +39,7 @@ __global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, int* d_oldFrontie
     int offset = *d_process_id * *d_elements_per_process;
 
     if(d_oldFrontier[id] == 1 && d_visited[id + offset] == 1 && *d_process_id == 1){
-        printf("Thread ID: %d\n", id);
+        //printf("Thread ID: %d\n", id);
     }
 
     if(id > *d_num_nodes)
@@ -49,7 +49,7 @@ __global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, int* d_oldFrontie
     __syncthreads();
 
     if (d_oldFrontier[id] == 1 && d_visited[id + offset] == 1){
-        printf("Node order: %d \n", id + offset); //This printf gives the order of vertices in BFS
+        //printf("Node order: %d \n", id + offset); //This printf gives the order of vertices in BFS
         d_levels[id + offset] = *d_currentLevel; //set the level of the current node
 
         int start = d_vertices[id + offset];
@@ -172,7 +172,7 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
     }
 
     int threads = 1024;
-    int blocks = 8;
+    int blocks = 2629;
 
     int done;
     int globalDone;
@@ -225,13 +225,13 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
 
         MPI_Bcast(&currentLevel, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-         if(world_rank == 1){
-                    for(i = 0; i < elementsPerProc; i++){
-                        if(subOldFrontier[i] == 1){
-                            printf("subOldFrontier[%d] = %d\n", i, subOldFrontier[i]);
-                        }
-                    }
-                }
+         //if(world_rank == 1){
+         //           for(i = 0; i < elementsPerProc; i++){
+         //               if(subOldFrontier[i] == 1){
+         //                   printf("subOldFrontier[%d] = %d\n", i, subOldFrontier[i]);
+         //               }
+         //           }
+         //       }
 
         iterations++;
         done = 1;
@@ -270,13 +270,13 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
         currentLevel++;
         }
 
-        if(world_rank == 0){
-            for(i = 0; i < num_nodes; i++){
-                if(globalOldFrontier[i] == 1){
-                    printf("globalOldFrontier[%d] = %d\n", i, globalOldFrontier[i]);
-                }
-            }
-        }
+        //if(world_rank == 0){
+        //    for(i = 0; i < num_nodes; i++){
+        //        if(globalOldFrontier[i] == 1){
+        //            printf("globalOldFrontier[%d] = %d\n", i, globalOldFrontier[i]);
+        //        }
+        //    }
+        //}
 
     } while (globalDone == 0);
 
