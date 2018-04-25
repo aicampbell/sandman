@@ -37,19 +37,14 @@ int getMaxLocalEdgesSize(int numPartitions){
     }
     else{
         int max = starts[0];
-        for(i=1; i < numPartitions; i++){
-            if(i == numPartitions -1){
-                if (maxEdges - starts[i] > max){
-                    max = maxEdges - starts[i];
-                }
-            }
-            else if (starts[i] - starts[i-1] > max){
-                max = starts[i] - starts[i-1];
-            }
-        }
+        for(i =1; i < numPartitions; i ++){
+    	  if(starts[i] - starts[i-1] > max){
+    	    max = starts[i] - starts[i-1];
+    	  }
+    	}
         assert( max < maxEdges );
         printf("max size: %d\n", max);
-        return max + 1000;
+        return max;
     }
 }
 
@@ -60,7 +55,7 @@ void computeStarts(int numPartitions, int* partitionEdges){
 
         starts[i] = startID;
         startID += partitionEdges[i];
-        assert( startID < maxEdges );
+        assert( startID <= maxEdges );
         printf("Start[%d] %d\n", i, starts[i]);
     }
 }
@@ -118,7 +113,7 @@ void partitionByDestination(int *vertices, int numPartitions){
     size[0] = 0;
 
     int v;
-    for(v = 0; v <= maxNodes; v++){
+    for(v = 0; v < maxNodes; v++){
         assert( current < numPartitions);
         partitionEdges[current] += getDegree(v);
         size[current] +=1;
@@ -145,7 +140,6 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     int i;
-    //int num_rows = 30000;
     int num_rows = 97890600;
     graph = (int**) malloc(sizeof(int*) * num_rows);
     for(i=0; i < num_rows; i++){
@@ -179,7 +173,7 @@ int main(int argc, char **argv) {
     MPI_Barrier(MPI_COMM_WORLD);
 
     int localEdgesSize = getMaxLocalEdgesSize(world_size);
-    //printf("local size: %d\n", localEdgesSize);
+    printf("local size: %d\n", localEdgesSize);
 
     //Added 10 is for safety to make sure enough memory is allocated.
     localEdges = (int *)malloc((localEdgesSize + 1000) * sizeof(int));
@@ -188,7 +182,7 @@ int main(int argc, char **argv) {
        offset = starts[world_rank];
        for(i = 0; i < (starts[world_rank + 1] - starts[world_rank]); i++){
             assert( starts[world_rank + 1] < maxEdges );
-            assert( (starts[world_rank + 1] - starts[world_rank]) < localEdgesSize );
+            assert( (starts[world_rank + 1] - starts[world_rank]) <= localEdgesSize );
             localEdges[i] = edges[i + offset];
        }
     }
@@ -203,10 +197,19 @@ int main(int argc, char **argv) {
     }
 
     printf("Calling bfs gpu\n");
-    printf("edges[17684] = %d\n", edges[17684]);
-    printf("source: %d\n", source);
 
     int edgeOffset = starts[world_rank];
     //Need to pass edge offset
     distributedBFS(nodes, localEdges, maxNodes, maxEdges, world_rank, world_size, source, edgeOffset);
+
+    for(i=0; i < num_rows; i++){
+            free(graph[i]);
+    }
+    free(graph);
+    free(nodes);
+    free(edges);
+    free(localEdges);
+    free(starts);
+
+    MPI_Finalize();
 }
