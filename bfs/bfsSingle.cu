@@ -105,9 +105,6 @@ void sendToGPU(int* vertices, int* edges, int* visited, int* newFrontier, int* l
             elementsPerProc = (num_nodes / world_size);
         }
 
-        if((num_nodes / world_size) % 2 != 0 && world_rank != (world_size -1))
-            elementsPerProc+=1;
-
         printf("Process %d elements per proc: %d\n", world_rank, elementsPerProc);
 
         cudaMalloc((void**)&d_elements_per_process, sizeof(int));
@@ -148,14 +145,11 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
         levels[i] = -1;
         visited[i] = 0;
         globalVisited[i] = 0;
-        //oldFrontier[i] = 0;
-        //newFrontier[i] = 0;
         globalOldFrontier[i] = 0;
         globalNewFrontier[i] = 0;
     }
 
     //set the source value to 1
-    //oldFrontier[source] = 1;
     globalOldFrontier[source] = 1;
     visited[source] = 1;
 
@@ -199,7 +193,6 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
         cudaMemcpy(globalNewFrontier, d_newFrontier, sizeof(int) * num_nodes, cudaMemcpyDeviceToHost);
         cudaMemcpy(visited, d_visited, sizeof(int) * num_nodes, cudaMemcpyDeviceToHost);
 
-
         //Reset the values:
         for(i = 0; i < num_nodes; i++){
             globalOldFrontier[i] = 0;
@@ -211,30 +204,30 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
 
         currentLevel++;
         }
-
+        MPI_Barrier(MPI_COMM_WORLD);
         MPI_Bcast(&iterations, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Scatter(globalOldFrontier, elementsPerProc, MPI_INT, subOldFrontier, elementsPerProc, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Allreduce(visited, globalVisited, num_nodes, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
-        for(i = 0; i < num_nodes; i++){
-            globalOldFrontier[i] = 0;
-            if(globalNewFrontier[i] == 1){
-                globalOldFrontier[i] = 1;
-                globalNewFrontier[i] = 0;
-            }
-        }
+        //for(i = 0; i < num_nodes; i++){
+        //    globalOldFrontier[i] = 0;
+        //    if(globalNewFrontier[i] == 1){
+        //        globalOldFrontier[i] = 1;
+        //        globalNewFrontier[i] = 0;
+        //    }
+        //}
 
         if(iterations > 0){
 
         MPI_Bcast(&currentLevel, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
          if(world_rank == 1){
-                    for(i = 0; i < elementsPerProc; i++){
-                        if(subOldFrontier[i] == 1){
-                            printf("subOldFrontier[%d] = %d\n", i + offset, subOldFrontier[i]);
-                        }
-                    }
+            for(i = 0; i < elementsPerProc; i++){
+                if(subOldFrontier[i] == 1){
+                    printf("subOldFrontier[%d] = %d\n", i + offset, subOldFrontier[i]);
                 }
+            }
+         }
 
         iterations++;
         done = 1;
@@ -258,30 +251,25 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
         printf("GlobalDone: %d\n", globalDone);
         printf("Iteration: %d\n", iterations);
 
-        printf("reset sub old front\n");
+        int count = 0;
+        for(i=0; i < elementsPerProc; i++){
+            if(subOldFrontier[i] == 1){
+                count++;
+            }
+        }
+        printf("PRocess %d: new frontier count: %d\n", world_rank, count);
+
+
         for(i=0; i < elementsPerProc; i++){
             subOldFrontier[i] = 0;
         }
-        printf("max num array:\n");
 
-                printf("reset sub new front\n");
-                for(i=offset; i < (world_rank + 1) * elementsPerProc; i++){
-                    if(subNewFrontier[i] == 1){
-                       printf("i = %d\n",i);
-                        subOldFrontier[i - offset] = 1;
-                        subNewFrontier[i] = 0;
-                    }
-                }
-
-        //BAK UP
-        //printf("reset sub new front\n");
-        //for(i=0; i < num_nodes; i++){
-        //    if(subNewFrontier[i] == 1){
-        //        printf("i - offset = %d\n",i - offset );
-        //        subOldFrontier[i - offset] = 1;
-        //        subNewFrontier[i] = 0;
-         //   }
-        //}
+        for(i=offset; i < (world_rank + 1) * elementsPerProc; i++){
+            if(subNewFrontier[i] == 1){
+                subOldFrontier[i - offset] = 1;
+                subNewFrontier[i] = 0;
+            }
+        }
 
         MPI_Gather(subOldFrontier, elementsPerProc, MPI_INT, globalOldFrontier, elementsPerProc, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Allreduce(visited, globalVisited, num_nodes, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
@@ -291,7 +279,7 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
         if(world_rank == 0){
             for(i = 0; i < num_nodes; i++){
                 if(globalOldFrontier[i] == 1){
-                    printf("globalOldFrontier[%d] = %d\n", i, globalOldFrontier[i]);
+                    //printf("globalOldFrontier[%d] = %d\n", i, globalOldFrontier[i]);
                 }
             }
         }
