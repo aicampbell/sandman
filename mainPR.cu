@@ -4,7 +4,7 @@
 #include "pr/pageRank.cu"
 #include <mpi.h>
 
-int graph[800][2];
+int **graph;
 int maxNodes, maxEdges, r, i;
 
 int *nodes;
@@ -14,6 +14,7 @@ int *partitionSizes;
 int *partitionEdges;
 int *size;
 int *starts;
+int *verticesStarts;
 
 void readInputFile(char* file){
     FILE *f;
@@ -24,6 +25,8 @@ void readInputFile(char* file){
 
 
     while ((fscanf(f, "%d %d", &graph[i][0], &graph[i][1])) != EOF) {
+        assert( graph[i][0] <= maxNodes );
+        assert( graph[i][1] <= maxNodes );
         i++;
     }
 }
@@ -35,16 +38,12 @@ int getMaxLocalEdgesSize(int numPartitions){
     }
     else{
         int max = starts[0];
-        for(i=1; i < numPartitions; i++){
-            if(i == numPartitions -1){
-                if (maxEdges - starts[i] > max){
-                    max = maxEdges -starts[i];
-                }
-            }
-            else if (starts[i] - starts[i-1] > max){
-                max = starts[i] - starts[i-1];
-            }
-        }
+        for(i =1; i < numPartitions; i ++){
+    	  if(starts[i] - starts[i-1] > max){
+    	    max = starts[i] - starts[i-1];
+    	  }
+    	}
+        assert( max < maxEdges );
         printf("max size: %d\n", max);
         return max;
     }
@@ -54,8 +53,11 @@ void computeStarts(int numPartitions, int* partitionEdges){
     int i;
     int startID = 0;
     for(i = 0; i < numPartitions; i++){
+
         starts[i] = startID;
-        startID += partitionEdges[i+1];
+        startID += partitionEdges[i];
+        assert( startID <= maxEdges );
+        printf("Start[%d] %d\n", i, starts[i]);
     }
 }
 
@@ -63,31 +65,34 @@ void convertToCSR(int maxNodes, int maxEdges, int vertices[], int edges[]) {
     int i;
     int j;
     int edge = 0;
+    int stop = 0;
 
-    for (i = 0; i < maxNodes; i++) {
+    for (i = 0; i <= maxNodes; i++) {
         vertices[i] = edge;
 
-        for (j = 0; j < maxEdges; j++) {
-            if (i == graph[j][1]) {
+        for(j = 0; j < maxEdges && stop == 0; j++) {
+
+            if (i == graph[j][1]){
+                assert(graph[j][0] <= maxNodes);
                //Sets edges[0] to the first position
                 edges[edge] = graph[j][0];
+                assert( edges[edge] != -1);
                 edge++;
+             } else if(i < graph[j][1]){
+                stop = 1;
              }
         }
+        stop = 0;
     }
     vertices[maxNodes] = maxEdges;
 }
 
 void getDegrees(){
 
-    for(i=0; i <= maxNodes; i++){
+    for(i=0; i < maxNodes; i++){
         if(i < maxNodes){
-            outDegrees[i] = nodes[i +1] - nodes[i];
-        }
-        else if(i == maxNodes){
-            outDegrees[i] = maxEdges - nodes[i];
-        }
-        else{
+            outDegrees[i] = nodes[i + 1] - nodes[i];
+        } else{
             outDegrees[i] = -1;
         }
     }
@@ -96,7 +101,6 @@ void getDegrees(){
 void partitionByDestination(int *vertices, int* outDegrees, int numPartitions){
     int averageDeg = maxEdges / numPartitions;
     printf("averageDeg Per Partition: %d\n", averageDeg);
-
 
     size = (int *)malloc(numPartitions * sizeof(int));
 
@@ -109,7 +113,8 @@ void partitionByDestination(int *vertices, int* outDegrees, int numPartitions){
     size[0] = 0;
 
     int v;
-    for(v = 0; v <= maxNodes; v++){
+    for(v = 0; v < maxNodes; v++){
+        assert( current < numPartitions);
         partitionEdges[current] += outDegrees[v];
         size[current] +=1;
         if(partitionEdges[current] >= averageDeg && current < numPartitions -1){
@@ -118,6 +123,17 @@ void partitionByDestination(int *vertices, int* outDegrees, int numPartitions){
         }
     }
     computeStarts(numPartitions, partitionEdges);
+
+
+    for(i = 0; i < numPartitions; i++){
+        for(v=0; v < maxNodes; v++){
+            if(starts[i] == vertices[v]){
+                verticesStarts[i] = v;
+                break;
+            }
+        }
+        printf("verticesStarts[%d]: %d\n", i, verticesStarts[i]);
+    }
 }
 
 int main(int argc, char **argv) {
@@ -131,21 +147,28 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     int i;
+    int num_rows = 97890600;
+    graph = (int**) malloc(sizeof(int*) * num_rows);
+    for(i=0; i < num_rows; i++){
+        graph[i] = (int*) malloc(sizeof(int) * 2 );
+    }
+
     char* file = argv[1];
     readInputFile(file);
 
-    nodes = (int *)malloc(maxNodes * sizeof(int));
-    outDegrees = (int *)malloc(maxNodes * sizeof(int));
+    nodes = (int *)malloc((maxNodes + 1) * sizeof(int));
+    outDegrees = (int *)malloc((maxNodes) * sizeof(int));
     edges = (int *)malloc(maxEdges * sizeof(int));
     partitionSizes = (int *)malloc(world_size * sizeof(int));
     starts = (int *)malloc(world_size * sizeof(int));
+    verticesStarts = (int *)malloc(world_size * sizeof(int));
 
     partitionEdges = (int *)malloc(world_size * sizeof(int));
 
     int edge = 0;
     int source = graph[0][0];
 
-    for (i = 0; i < maxNodes; i++) {
+    for (i = 0; i <= maxNodes; i++) {
         nodes[i] = 0;
     }
 
@@ -163,14 +186,14 @@ int main(int argc, char **argv) {
     int localEdgesSize = getMaxLocalEdgesSize(world_size);
     printf("local size: %d\n", localEdgesSize);
 
-    //Added 10 is for safety to make sure enough memory is allocated.
+    //Added 100 is for safety to make sure enough memory is allocated.
     localEdges = (int *)malloc((localEdgesSize + 1000) * sizeof(int));
     int offset = 0;
     if(world_rank < world_size - 1){
        offset = starts[world_rank];
        for(i = 0; i < (starts[world_rank + 1] - starts[world_rank]); i++){
             assert( starts[world_rank + 1] < maxEdges );
-            assert( (starts[world_rank + 1] - starts[world_rank]) < localEdgesSize );
+            assert( (starts[world_rank + 1] - starts[world_rank]) <= localEdgesSize );
             localEdges[i] = edges[i + offset];
        }
     }
@@ -185,8 +208,11 @@ int main(int argc, char **argv) {
     }
 
     for(i=0; i < maxNodes; i++){
-        printf("Degrees: %d\n", outDegrees[i]);
+        //printf("Degrees: %d\n", outDegrees[i]);
     }
 
-    pageRank(nodes, maxNodes, edges, maxEdges, outDegrees);
+    printf("Calling Page Rank");
+    pageRank(nodes, maxNodes, edges, maxEdges, outDegrees, verticesStarts, world_rank, world_size);
+
+    MPI_Finalize();
 }
