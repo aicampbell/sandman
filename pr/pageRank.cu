@@ -241,15 +241,19 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
     MPI_Bcast(globalY, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     while(iteration < maxIterations && delta > tol){
-
+        if(world_rank == 1 && iteration > 1){
+        for(i=0; i < num_vertices; i++){
+            //printf("y[%d]: %1f\n", i, y[i]);
+        }
+        }
 
         //call iterations
         iterate(globalX, x, globalY, y, num_vertices);
-        MPI_Reduce(y, globalY, num_vertices, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(y, globalY, num_vertices, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
         if(world_rank == 0 && iteration > 1){
             for(i=0; i < num_vertices; i++){
-                printf("globalY[%d]: %1f\n", i, globalY[i]);
+                //printf("globalY[%d]: %1f\n", i, globalY[i]);
         }
         }
 
