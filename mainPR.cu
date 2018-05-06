@@ -43,7 +43,7 @@ int getMaxLocalEdgesSize(int numPartitions){
     	    max = starts[i] - starts[i-1];
     	  }
     	}
-        assert( max < maxEdges );
+        assert( max <= maxEdges );
         printf("max size: %d\n", max);
         return max;
     }
@@ -70,7 +70,7 @@ void convertToCSR(int maxNodes, int maxEdges, int vertices[], int edges[]) {
     for (i = 0; i <= maxNodes; i++) {
         vertices[i] = edge;
 
-        for(j = 0; j < maxEdges && stop == 0; j++) {
+        for(j = edge; j < maxEdges && stop == 0; j++) {
 
             if (i == graph[j][1]){
                 assert(graph[j][0] <= maxNodes);
@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     int i;
-    int num_rows = 97890600;
+    int num_rows = 97890601;
     graph = (int**) malloc(sizeof(int*) * num_rows);
     for(i=0; i < num_rows; i++){
         graph[i] = (int*) malloc(sizeof(int) * 2 );
@@ -155,6 +155,7 @@ int main(int argc, char **argv) {
 
     char* file = argv[1];
     readInputFile(file);
+    printf("Graph loaded\n");
 
     nodes = (int *)malloc((maxNodes + 1) * sizeof(int));
     outDegrees = (int *)malloc((maxNodes) * sizeof(int));
@@ -172,6 +173,7 @@ int main(int argc, char **argv) {
         nodes[i] = 0;
     }
 
+    printf("CSC \n");
     convertToCSR(maxNodes, maxEdges, nodes, edges);
     printf("\n");
 

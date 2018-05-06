@@ -44,6 +44,12 @@ __global__ void CUDA_INIT_PR_VALUES(double* d_x, int* d_num_vertices){
     int id = threadIdx.x + blockIdx.x * blockDim.x;
 
     d_x[id] = 1.0f / *d_num_vertices;
+    if(id < 10){
+        double res = (double)1/2692096;
+        printf("num vertices: %d", *d_num_vertices);
+        printf("GPU float: %5f\n", d_x[id]);
+        printf("GPU res: %.20f\n", res);
+    }
 
 }
 
@@ -72,6 +78,8 @@ __global__ void CUDA_ITERATE_KERNEL(int* d_vertices, int* d_destinations, double
         }
         //Likely need to add this outside of kernel when using MPI. Talk with Hans as this is constant
         sum += (1 - d) / *d_num_vertices;
+
+
 
         d_y[id  + *d_offset] = sum;
     }
@@ -140,13 +148,13 @@ void iterate(double* inX, double* outX, double* inY, double* outY, int num_verti
 
 }
 
-float sum(double* array, int length){
-    double sum = 0.f;
-    float err = 0.f;
+double sum(double* array, int length){
+    double sum = 0;
+    double err = 0;
     int i;
     for(i = 0; i < length; i++){
-        float tmp = sum;
-        float y = array[i] + err;
+        double tmp = sum;
+        double y = array[i] + err;
         sum = tmp + y;
         err = tmp - sum;
         err += y;
@@ -155,18 +163,29 @@ float sum(double* array, int length){
 }
 
 //Calculate manhatten distance between input and output
-float normdiff(double* input, double* output, int length){
-    float d = 0.f;
-    float err = 0.f;
+double normdiff(double* input, double* output, int length){
+    double d = 0;
+    double err = 0;
     int i;
     for(i = 0; i < length; i++){
-        float tmp = d;
-        float y = abs(output[i] - input[i]) + err;
+        double tmp = d;
+        double y = abs(output[i] - input[i]) + err;
         d = tmp + y;
         err = tmp - d;
         err += y;
     }
     return d;
+}
+
+int factor(int length){
+    int res = 1;
+    int i;
+    for(i=1; i <= length && i <= 1024; i++){
+        if(length % i == 0){
+            res = i;
+        }
+    }
+    return res;
 }
 
 
@@ -194,6 +213,7 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
     else{
         numLocalVertices = (num_vertices - verticesStarts[world_rank]);
     }
+    printf("numLocalVertices: %d\n", numLocalVertices);
 
     int *recvcounts = NULL;
     if(world_rank == 0){
@@ -209,8 +229,13 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         }
     }
 
-    blocks =  numLocalVertices / 2;
-    threads = 2;
+
+    threads = factor(numLocalVertices);
+    blocks =  numLocalVertices / threads;
+
+
+    printf("threads: %d\n", threads);
+    printf("blocks: %d\n", blocks);
 
     int totlen = 0;
     int* displs = NULL;
@@ -241,31 +266,28 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
     MPI_Bcast(globalY, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     while(iteration < maxIterations && delta > tol){
-        if(world_rank == 1 && iteration > 1){
-        for(i=0; i < num_vertices; i++){
-            //printf("y[%d]: %1f\n", i, y[i]);
-        }
-        }
 
         //call iterations
         iterate(globalX, x, globalY, y, num_vertices);
         MPI_Reduce(y, globalY, num_vertices, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
         if(world_rank == 0 && iteration > 1){
-            for(i=0; i < num_vertices; i++){
-                //printf("globalY[%d]: %1f\n", i, globalY[i]);
+            for(i=0; i < 50; i++){
+                //printf("globalY[%d]: %.50f\n", i, globalY[i]);
         }
         }
 
         if(world_rank == 0){
             double weight = 1.0f - sum(globalY, num_vertices); //ensure y[] sums to 1
-            printf("weight: %1f\n", weight);
+            printf("weight: %.50f\n", weight);
 
 
         cudaMemcpy(d_weight, &weight, sizeof(double), cudaMemcpyHostToDevice);
         cudaMemcpy(d_y, globalY, sizeof(double) * num_vertices, cudaMemcpyHostToDevice);
 
-        blocks = num_vertices / 2;
+        threads = factor(num_vertices);
+        blocks = num_vertices / threads;
+
         CUDA_WEIGHTS_KERNEL<<<blocks, threads>>>(d_y, d_weight, d_num_vertices);
 
         cudaMemcpy(globalY, d_y, sizeof(double) * num_vertices, cudaMemcpyDeviceToHost);
@@ -275,7 +297,7 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
 
         //rescale to unit length
         weight = 1.0f / sum(globalY, num_vertices);
-        printf("weight: %1f\n", weight);
+        printf("After rescale: weight: %6f\n", weight);
 
         cudaMemcpy(d_weight, &weight, sizeof(double), cudaMemcpyHostToDevice);
         cudaMemcpy(d_y, globalY, sizeof(double) * num_vertices, cudaMemcpyHostToDevice);
@@ -300,6 +322,11 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
     if(delta > tol){
         printf("\n");
         printf("No convergence\n");
+
+        int i;
+        for(i = 0; i < 10; i++){
+            printf("x[%d] = %.70f\n", i, globalX[i]);
+        }
     }
     else{
         printf("\n");
@@ -309,7 +336,7 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
 
         int i;
         for(i =0; i < num_vertices; i++){
-            printf("x[%d] = %.5f\n", i, globalX[i]);
+            printf("x[%d] = %.70f\n", i, globalX[i]);
         }
     }
     }
