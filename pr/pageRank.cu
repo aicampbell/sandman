@@ -191,7 +191,7 @@ int factor(int length){
 
 
 void pageRank(int* vertices, int num_vertices, int* destinations, int num_destinations, int* outDegrees, int* verticesStarts,
-                int world_rank, int world_size){
+                int world_rank, int world_size, int num_edges){
 
     int numLocalVertices;
     int i;
@@ -269,9 +269,15 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
 
     double startIterationTime;
     double endIterationTime;
+
+    double startCommunicationTime;
+    double endCommunicationTime;
+
+
     clock_t start;
     clock_t diff;
     int msec;
+    double verticesPermSec;
     while(iteration < maxIterations && delta > tol){
 
         startIterationTime = MPI_Wtime();
@@ -289,6 +295,8 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         diff = clock() - start;
         msec = diff * 1000 / CLOCKS_PER_SEC;
         printf("Process: %d -> Time taken %d seconds %d milliseconds\n", world_rank, msec/1000, msec%1000);
+        printf("Process: %d -> Vertices processed per msec  %.5f\n", world_rank, (double)num_vertices/(msec%1000));
+        printf("Process: %d -> edges processed per msec  %.5f\n", world_rank, (double)num_edges/(msec%1000));
 
         MPI_Reduce(y, globalY, num_vertices, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
@@ -330,14 +338,19 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
 
         }
 
+        startCommunicationTime = MPI_Wtime();
         MPI_Bcast(&delta, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         MPI_Bcast(globalX, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        endCommunicationTime = MPI_Wtime();
         //MPI_Bcast(globalY, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         //MPI_Bcast(y, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-        if(world_rank == 1){
+        if(world_rank == 0){
             endIterationTime = MPI_Wtime();
-            printf("Iteration: %d - Time taken: %.6f\n", iteration, endIterationTime - startIterationTime);
+            printf("Iteration: %d - Time taken: %.6f s\n", iteration, endIterationTime - startIterationTime);
+
+            printf("Iteration: %d - Communication Time taken: %.6f s\n", iteration, endCommunicationTime - startCommunicationTime);
+
         }
         iteration++;
     }
@@ -361,7 +374,7 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
     }
     else{
         printf("\n");
-        printf("Execution Time: %.6f\n", finishExecution - startExecution);
+        printf("Execution Time: %.6f s\n", finishExecution - startExecution);
         printf("\n");
         printf("Convergence at iteration %d \n", iteration - 1);
         printf("\n");

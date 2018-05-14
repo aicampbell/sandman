@@ -216,7 +216,7 @@ int main(int argc, char **argv) {
     }
 
     printf("Calling Page Rank");
-    pageRank(nodes, maxNodes, edges, maxEdges, outDegrees, verticesStarts, world_rank, world_size);
+    pageRank(nodes, maxNodes, edges, maxEdges, outDegrees, verticesStarts, world_rank, world_size, maxEdges);
 
     MPI_Finalize();
 }
