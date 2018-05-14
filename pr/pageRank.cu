@@ -267,6 +267,13 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
 
     while(iteration < maxIterations && delta > tol){
 
+        //Each process except master resets y and global Y to 0.
+        //Better than doing broadcast at end of while loop to stop network bottleneck
+        if(iteration > 0 && world_rank != 0){
+            memset(y, 0, num_vertices * sizeof(double));
+            memset(globalY, 0, num_vertices * sizeof(double));
+        }
+
         //call iterations
         iterate(globalX, x, globalY, y, num_vertices);
         MPI_Reduce(y, globalY, num_vertices, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
@@ -306,12 +313,15 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         cudaMemcpy(globalX, d_x, sizeof(double) * num_vertices, cudaMemcpyDeviceToHost);
         cudaMemcpy(y, d_y, sizeof(double) * num_vertices, cudaMemcpyDeviceToHost);
         cudaMemcpy(globalY, d_y, sizeof(double) * num_vertices, cudaMemcpyDeviceToHost);
+
         }
 
         MPI_Bcast(&delta, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         MPI_Bcast(globalX, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-        MPI_Bcast(globalY, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-        MPI_Bcast(y, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        //MPI_Bcast(globalY, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        //MPI_Bcast(y, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+
 
         iteration++;
     }

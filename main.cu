@@ -13,6 +13,7 @@ int *partitionSizes;
 int *partitionEdges;
 int *size;
 int *starts;
+int *verticesStarts;
 
 void readInputFile(char* file){
     FILE *f;
@@ -37,12 +38,12 @@ int getMaxLocalEdgesSize(int numPartitions){
     }
     else{
         int max = starts[0];
-        for(i =1; i < numPartitions; i ++){
+        for(i = 1; i < numPartitions; i ++){
     	  if(starts[i] - starts[i-1] > max){
     	    max = starts[i] - starts[i-1];
     	  }
     	}
-        assert( max < maxEdges );
+        assert( max <= maxEdges );
         printf("max size: %d\n", max);
         return max;
     }
@@ -127,6 +128,16 @@ void partitionByDestination(int *vertices, int numPartitions){
         printf( "partition Edge %d = %d\n", i, partitionEdges[i] );
     }
     computeStarts(numPartitions, partitionEdges);
+
+    for(i = 0; i < numPartitions; i++){
+        for(v=0; v < maxNodes; v++){
+            if(starts[i] == vertices[v]){
+                verticesStarts[i] = v;
+                break;
+                }
+        }
+        printf("verticesStarts[%d]: %d\n", i, verticesStarts[i]);
+    }
 }
 
 int main(int argc, char **argv) {
@@ -153,6 +164,7 @@ int main(int argc, char **argv) {
     edges = (int *)malloc(maxEdges * sizeof(int));
     partitionSizes = (int *)malloc(world_size * sizeof(int));
     starts = (int *)malloc(world_size * sizeof(int));
+    verticesStarts = (int *)malloc(world_size * sizeof(int));
 
     partitionEdges = (int *)malloc(world_size * sizeof(int));
 
@@ -200,7 +212,7 @@ int main(int argc, char **argv) {
 
     int edgeOffset = starts[world_rank];
     //Need to pass edge offset
-    distributedBFS(nodes, localEdges, maxNodes, maxEdges, world_rank, world_size, source, edgeOffset);
+    distributedBFS(nodes, localEdges, maxNodes, maxEdges, verticesStarts, world_rank, world_size, source, edgeOffset);
 
     for(i=0; i < num_rows; i++){
             free(graph[i]);

@@ -58,6 +58,7 @@ void computeStarts(int numPartitions, int* partitionEdges){
         startID += partitionEdges[i];
         assert( startID <= maxEdges );
         printf("Start[%d] %d\n", i, starts[i]);
+
     }
 }
 
@@ -118,6 +119,7 @@ void partitionByDestination(int *vertices, int* outDegrees, int numPartitions){
         partitionEdges[current] += outDegrees[v];
         size[current] +=1;
         if(partitionEdges[current] >= averageDeg && current < numPartitions -1){
+            printf("size[current] : %d\n", size[current]);
             current++;
             size[current] = 0;
         }
@@ -185,7 +187,8 @@ int main(int argc, char **argv) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    int localEdgesSize = getMaxLocalEdgesSize(world_size);
+    int localEdgesSize = getMaxLocalEdges
+    Size(world_size);
     printf("local size: %d\n", localEdgesSize);
 
     //Added 100 is for safety to make sure enough memory is allocated.
