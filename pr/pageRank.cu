@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <mpi.h>
+#include <time.h>
 
 int* d_vertices;
 int* d_edges;
@@ -46,7 +47,6 @@ __global__ void CUDA_INIT_PR_VALUES(double* d_x, int* d_num_vertices){
     d_x[id] = 1.0f / *d_num_vertices;
     if(id < 10){
         double res = (double)1/2692096;
-        printf("num vertices: %d", *d_num_vertices);
         printf("GPU float: %5f\n", d_x[id]);
         printf("GPU res: %.20f\n", res);
     }
@@ -215,6 +215,8 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
     }
     printf("numLocalVertices: %d\n", numLocalVertices);
 
+    double startExecution = MPI_Wtime();
+
     int *recvcounts = NULL;
     if(world_rank == 0){
         recvcounts = (int *) malloc(world_size * sizeof(int));
@@ -265,7 +267,14 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
     MPI_Bcast(globalX, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     MPI_Bcast(globalY, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
+    double startIterationTime;
+    double endIterationTime;
+    clock_t start;
+    clock_t diff;
+    int msec;
     while(iteration < maxIterations && delta > tol){
+
+        startIterationTime = MPI_Wtime();
 
         //Each process except master resets y and global Y to 0.
         //Better than doing broadcast at end of while loop to stop network bottleneck
@@ -275,7 +284,12 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         }
 
         //call iterations
+        start = clock();
         iterate(globalX, x, globalY, y, num_vertices);
+        diff = clock() - start;
+        msec = diff * 1000 / CLOCKS_PER_SEC;
+        printf("Process: %d -> Time taken %d seconds %d milliseconds\n", world_rank, msec/1000, msec%1000);
+
         MPI_Reduce(y, globalY, num_vertices, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
         if(world_rank == 0 && iteration > 1){
@@ -286,7 +300,7 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
 
         if(world_rank == 0){
             double weight = 1.0f - sum(globalY, num_vertices); //ensure y[] sums to 1
-            printf("weight: %.50f\n", weight);
+            printf("weight: %.5f\n", weight);
 
 
         cudaMemcpy(d_weight, &weight, sizeof(double), cudaMemcpyHostToDevice);
@@ -321,15 +335,22 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         //MPI_Bcast(globalY, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         //MPI_Bcast(y, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-
-
+        if(world_rank == 1){
+            endIterationTime = MPI_Wtime();
+            printf("Iteration: %d - Time taken: %.6f\n", iteration, endIterationTime - startIterationTime);
+        }
         iteration++;
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
+    double finishExecution = MPI_Wtime();
+
     if(world_rank == 0){
 
     if(delta > tol){
+
+        printf("\n");
+        printf("Execution Time: %.6f\n", finishExecution - startExecution);
         printf("\n");
         printf("No convergence\n");
 
@@ -339,6 +360,8 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         }
     }
     else{
+        printf("\n");
+        printf("Execution Time: %.6f\n", finishExecution - startExecution);
         printf("\n");
         printf("Convergence at iteration %d \n", iteration - 1);
         printf("\n");

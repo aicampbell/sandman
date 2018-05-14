@@ -187,8 +187,7 @@ int main(int argc, char **argv) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    int localEdgesSize = getMaxLocalEdges
-    Size(world_size);
+    int localEdgesSize = getMaxLocalEdgesSize(world_size);
     printf("local size: %d\n", localEdgesSize);
 
     //Added 100 is for safety to make sure enough memory is allocated.
