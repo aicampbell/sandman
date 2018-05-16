@@ -75,6 +75,17 @@ __global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, int* d_oldFrontie
 
 }
 
+int getDegree(int vertex, int* vertices, int maxNodes){
+
+    //DO NOT DO <=
+    if(vertex < maxNodes){
+        return vertices[vertex +1] - vertices[vertex];
+    }
+    else{
+        return -1;
+    }
+}
+
 void sendToGPU(int* vertices, int* edges, int* visited, int* newFrontier, int* levels, int num_nodes, int num_edges,
                 int* verticesStarts, int world_size, int world_rank, int edgeOffset){
 
@@ -230,6 +241,7 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
     double msec;
 
     int iterations = 0;
+    int count = 0;
 
     do {
         if(iterations == 0 && world_rank == 0){
@@ -288,7 +300,8 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
 
             MPI_Bcast(&currentLevel, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-            int count = 0;
+            count = 0;
+            printf("First scatterv : Process %d: sub old frontier count: %d\n", world_rank, count);
             for(i = 0; i < nodesPerProc + 1; i++){
                 if(subOldFrontier[i] == 1){
                 count++;
@@ -341,6 +354,7 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
             MPI_Reduce(subNewFrontier, globalOldFrontier, num_nodes, MPI_INT, MPI_LOR, 0, MPI_COMM_WORLD);
             //Reset new subFrontier values to 0
             memset(subNewFrontier, 0, num_nodes * sizeof(int));
+            memset(subOldFrontier, 0, nodesPerProc * sizeof(int));
 
 
             MPI_Allreduce(visited, globalVisited, num_nodes, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
@@ -383,11 +397,23 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
     }
 
     if(world_rank == 0){
-       printf("num_nodes: %d\n", num_nodes);
-       printf("\nLevel:\n");
-       for (i = 0; i < num_nodes; i++)
-           printf("node %d level: %d\n", i, globalLevels[i]);
-       printf("\n");
+
+        int edgesAnalysed = 0;
+        for(i = 0; i < num_nodes; i++){
+             if(globalLevels[i] > -1){
+                 edgesAnalysed += getDegree(i, vertices, num_nodes);
+             }
+        }
+
+
+        printf("num_nodes: %d\n", num_nodes);
+        printf("Edges Analysed: %d\n", edgesAnalysed);
+        printf("Edges Analysed/sec: %.5f\n", edgesAnalysed/(endExecution - startExecution));
+
+        printf("\nLevel:\n");
+        for (i = 0; i < num_nodes; i++)
+            printf("node %d level: %d\n", i, globalLevels[i]);
+        printf("\n");
     }
     MPI_Barrier(MPI_COMM_WORLD);
 }
