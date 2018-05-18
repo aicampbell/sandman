@@ -381,7 +381,7 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         printf("Values:\n");
 
         int i;
-        for(i =0; i < num_vertices; i++){
+        for(i =0; i < num_vertices/5; i++){
             printf("x[%d] = %.70f\n", i, globalX[i]);
         }
     }

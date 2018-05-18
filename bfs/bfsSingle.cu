@@ -105,6 +105,7 @@ void sendToGPU(int* vertices, int* edges, int* visited, int* newFrontier, int* l
         }else{
             nodesPerProc = verticesStarts[world_rank + 1] - verticesStarts[world_rank];
         }
+	assert( nodesPerProc > 0 );
         printf("Process %d nodes per proc: %d\n", world_rank, nodesPerProc);
 
         cudaMalloc((void**)&d_nodes_per_process, sizeof(int));
