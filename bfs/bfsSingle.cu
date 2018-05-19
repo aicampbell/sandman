@@ -108,6 +108,7 @@ void sendToGPU(int* vertices, int* edges, int* visited, int* newFrontier, int* l
         }else{
             nodesPerProc = verticesStarts[world_rank + 1] - verticesStarts[world_rank];
         }
+	assert( nodesPerProc > 0 );
         printf("Process %d nodes per proc: %d\n", world_rank, nodesPerProc);
 
         cudaMalloc((void**)&d_nodes_per_process, sizeof(int));
@@ -228,7 +229,6 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
     double endCommunicationTime1;
 
     int iterations = 0;
-    int count = 0;
 
     do {
         if(iterations == 0 && world_rank == 0){
@@ -317,7 +317,6 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
 
             //Reset old and new subFrontier values to 0
             memset(subNewFrontier, 0, num_nodes * sizeof(int));
-            memset(subOldFrontier, 0, nodesPerProc * sizeof(int));
 
             MPI_Allreduce(visited, globalVisited, num_nodes, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 

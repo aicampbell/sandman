@@ -71,7 +71,8 @@ void convertToCSR(int maxNodes, int maxEdges, int* vertices, int** graph) {
     for (i = 0; i <= maxNodes; i++) {
 
         vertices[i] = edge; //start at the point where the previous vertex left off
-
+	
+	// always skip to the place where we left off
         for (j = edge; j < maxEdges && stop == 0; j++) {
 
              if (i == graph[j][0]) {
@@ -86,8 +87,9 @@ void convertToCSR(int maxNodes, int maxEdges, int* vertices, int** graph) {
         }
         stop = 0; //reset stop after each vertex
     }
-    vertices[maxNodes] = maxEdges;
+    vertices[maxNodes] = maxEdges; //set the last vertex to the number of edges.
 }
+
 
 /*
 *Return number of outgoing edges for a vertex
@@ -104,10 +106,9 @@ int getDegree(int vertex){
 void partitionByEdges(int *vertices, int numPartitions){
     int averageDeg = maxEdges / numPartitions;
     printf("Average edges per partition: %d\n", averageDeg);
-
     size = (int *)malloc(numPartitions * sizeof(int));
 
-    int p;
+    int p; //set the number of edges in each position to 0 by default.
     for(p=0; p < numPartitions; p++){
         partitionEdges[p] = 0;
     }
@@ -118,9 +119,11 @@ void partitionByEdges(int *vertices, int numPartitions){
     int v;
     for(v = 0; v < maxNodes; v++){
         assert( current < numPartitions);
-        partitionEdges[current] += getDegree(v);
-        size[current] +=1;
-        if(partitionEdges[current] >= averageDeg && current < numPartitions -1){
+        partitionEdges[current] += getDegree(v); //get the number of outgoing edges for the vertex and add it to the current partition
+        size[current] +=1; //number of vertices in this partition
+
+	if(partitionEdges[current] >= averageDeg && current < numPartitions -1){
+	//average number of edges has been met or exceeded for this partition. Start filling next partition
             current++;
             size[current] = 0;
         }
@@ -129,14 +132,16 @@ void partitionByEdges(int *vertices, int numPartitions){
     for(i = 0; i < numPartitions; i++){
         printf( "Number of edges in partition %d = %d\n", i, partitionEdges[i] );
     }
+    //Compute the starting positions (global edge offset) for each process
     computeStarts(numPartitions, partitionEdges);
 
+    //Compute the global vertex offset for each partition.
     for(i = 0; i < numPartitions; i++){
         for(v=0; v < maxNodes; v++){
             if(starts[i] == vertices[v]){
                 verticesStarts[i] = v;
                 break;
-                }
+            }
         }
         printf("vertex starting position parition[%d]: %d\n", i, verticesStarts[i]);
     }
@@ -156,23 +161,23 @@ int main(int argc, char **argv) {
     int num_rows = 106349230;
     graph = (int**) malloc(sizeof(int*) * num_rows);
     for(i=0; i < num_rows; i++){
-        graph[i] = (int*) malloc(sizeof(int) * 2 );
+        graph[i] = (int*) malloc(sizeof(int) * 2 ); 
     }
 
     char* file = argv[1];
     readInputFile(file);
 
-    nodes = (int *)malloc((maxNodes + 1) * sizeof(int));
-    edges = (int *)malloc(maxEdges * sizeof(int));
-    partitionSizes = (int *)malloc(world_size * sizeof(int));
-    starts = (int *)malloc(world_size * sizeof(int));
-    verticesStarts = (int *)malloc(world_size * sizeof(int));
-
-    partitionEdges = (int *)malloc(world_size * sizeof(int));
+    nodes = (int *)malloc((maxNodes + 1) * sizeof(int)); //allocate vertices
+    edges = (int *)malloc(maxEdges * sizeof(int)); //allocate edges
+    partitionSizes = (int *)malloc(world_size * sizeof(int)); //allocate number of partitions
+    starts = (int *)malloc(world_size * sizeof(int));  //allocate edge offsets
+    verticesStarts = (int *)malloc(world_size * sizeof(int)); //allocate vertex offsets
+    partitionEdges = (int *)malloc(world_size * sizeof(int)); //allocate actual partitions
 
     int edge = 0;
     int source = graph[0][0];
 
+    //set all vertex values to 0 by default. Could likely use OpenMP to increase the efficiency here
     for (i = 0; i <= maxNodes; i++) {
         nodes[i] = 0;
     }
