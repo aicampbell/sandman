@@ -19,18 +19,18 @@
     int* d_newFrontier;
     int* d_levels;
     int* d_currentLevel;
-    int* d_num_nodes;
-    int* d_num_edges;
+    int* d_num_nodes; //number of vertices
+    int* d_num_edges; //number of edges
     int* d_done;
-    int* d_process_id;
-    //Number of nodes in the old frontier for each process
-    int* d_nodes_per_process;
+    int* d_process_id; //world_rank
+    int* d_nodes_per_process; //Number of nodes in the old frontier for each process
     int* d_edgeOffset;
-    int* d_nodeOffset;
+    int* d_nodeOffset; //vertex offset
 
     int world_rank;
     int world_size;
 
+//CUDA KERNEL
 __global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, int* d_oldFrontier, int* d_newFrontier, int* d_visited,
      int* d_levels, int *d_currentLevel, int *d_done, int *d_num_nodes, int *d_num_edges, int *d_process_id,
      int *d_nodes_per_process, int *d_nodeOffset, int *d_edgeOffset){
@@ -48,21 +48,13 @@ __global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, int* d_oldFrontie
     __syncthreads();
 
     if (d_oldFrontier[id] == 1 && d_visited[id + offset] == 1){
-        //printf("Node order: %d \n", id + offset); //This printf gives the order of vertices in BFS
         d_levels[id + offset] = *d_currentLevel; //set the level of the current node
 
         int start = d_vertices[id + offset];
         int end = d_vertices[id + 1 + offset];
 
-        //need to set starting vertices like pr in main.cu
-
-        //printf("rank: %d : start: %d\n", *d_process_id, start);
-        //printf("rank: %d : end: %d\n", *d_process_id, end);
-        //printf("rank: %d : edgeOffset: %d\n", *d_process_id, *d_edgeOffset );
-
         for(i = start; i < end; i++){
             int nid = d_edges[i - *d_edgeOffset];
-            //printf("GPU Nid: %d\n", nid);
             printf("");
             if(d_visited[nid] == false){
                 d_visited[nid] = 1;
@@ -75,9 +67,8 @@ __global__ void CUDA_BFS_KERNEL(int *d_vertices, int *d_edges, int* d_oldFrontie
 
 }
 
+//Used to get total edges analysed at the end
 int getDegree(int vertex, int* vertices, int maxNodes){
-
-    //DO NOT DO <=
     if(vertex < maxNodes){
         return vertices[vertex +1] - vertices[vertex];
     }
@@ -86,6 +77,7 @@ int getDegree(int vertex, int* vertices, int maxNodes){
     }
 }
 
+//Initial setup - copying initial values to GPU
 void sendToGPU(int* vertices, int* edges, int* visited, int* newFrontier, int* levels, int num_nodes, int num_edges,
                 int* verticesStarts, int world_size, int world_rank, int edgeOffset){
 
@@ -138,7 +130,7 @@ void sendToGPU(int* vertices, int* edges, int* visited, int* newFrontier, int* l
         cudaMalloc((void**)&d_done, sizeof(int));
 }
 
-
+//Get the number of threads for the CUDA kernel
 int factor(int length){
     int res = 1;
     int i;
@@ -199,14 +191,13 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
 
         for(i=1; i < world_size; i++){
             displs[i] = displs[i-1] + globalNodesPerProcs[i-1];
-            printf("displs[%d]: %d\n", i, displs[i]);
         }
     }
     MPI_Bcast(displs, world_size, MPI_INT, 0, MPI_COMM_WORLD);
     offset = displs[world_rank];
     printf("Process %d offset: %d\n", world_rank, offset);
 
-    //do nodeDisplacement on GPU
+    //do vertexDisplacement on GPU
     cudaMemcpy(d_nodeOffset, &offset, sizeof(int), cudaMemcpyHostToDevice);
 
     //Allocate sub arrays for MPI
@@ -236,10 +227,6 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
     double startCommunicationTime1;
     double endCommunicationTime1;
 
-    clock_t start;
-    clock_t diff;
-    double msec;
-
     int iterations = 0;
     int count = 0;
 
@@ -254,12 +241,9 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
             cudaMemcpy(d_oldFrontier, globalOldFrontier, sizeof(int) * num_nodes, cudaMemcpyHostToDevice);
             cudaMemcpy(d_visited, visited, sizeof(int) * num_nodes, cudaMemcpyHostToDevice);
 
-            start = clock();
             CUDA_BFS_KERNEL <<<blocks, threads >>>(d_vertices, d_edges, d_oldFrontier, d_newFrontier,
                                            d_visited, d_levels, d_currentLevel, d_done, d_num_nodes, d_num_edges,
                                            d_process_id, d_nodes_per_process, d_nodeOffset, d_edgeOffset);
-            diff = clock() - start;
-            msec = diff * 1000 / CLOCKS_PER_SEC;
 
             cudaMemcpy(&done, d_done , sizeof(int), cudaMemcpyDeviceToHost);
             cudaMemcpy(globalNewFrontier, d_newFrontier, sizeof(int) * num_nodes, cudaMemcpyDeviceToHost);
@@ -277,9 +261,6 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
             currentLevel++;
             endIterationTime = MPI_Wtime();
             printf("Iteration: %d - Time taken: %.6f s\n", iterations, endIterationTime - startIterationTime);
-            printf("Process: %d -> Time taken %.20f milliseconds\n", world_rank, msec);
-            //printf("Process: %d -> Vertices processed per msec  %.5f\n", world_rank, (double)1/(msec%1000));
-
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
@@ -297,19 +278,18 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
 
         if(iterations > 0){
             startIterationTime = MPI_Wtime();
-
             MPI_Bcast(&currentLevel, 1, MPI_INT, 0, MPI_COMM_WORLD);
+            iterations++;
 
             count = 0;
-            printf("First scatterv : Process %d: sub old frontier count: %d\n", world_rank, count);
-            for(i = 0; i < nodesPerProc + 1; i++){
+            for(i = 0; i < nodesPerProc + 1; i++){ //could be done with openMP later
                 if(subOldFrontier[i] == 1){
                 count++;
                 }
             }
-            printf("First scatterv : Process %d: sub old frontier count: %d\n", world_rank, count);
+            printf("Iteration: %d - Process %d: sub old frontier count: %d\n", iterations, world_rank, count);
 
-            iterations++;
+
             done = 1;
 
             cudaMemcpy(d_done, &done, sizeof(int), cudaMemcpyHostToDevice);
@@ -319,17 +299,10 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
 
             threads = factor(nodesPerProc);
             blocks = nodesPerProc / threads;
-            //printf("threads: %d\n", threads);
-            //printf("blocks: %d\n", blocks);
 
-            start = clock();
             CUDA_BFS_KERNEL <<<blocks, threads >>>(d_vertices, d_edges, d_oldFrontier, d_newFrontier,
                             d_visited, d_levels, d_currentLevel, d_done, d_num_nodes, d_num_edges,
                             d_process_id, d_nodes_per_process, d_nodeOffset, d_edgeOffset);
-            diff = clock() - start;
-            msec = diff * 1000 / CLOCKS_PER_SEC;
-            //printf("Process: %d -> Time taken %d seconds %.5f milliseconds\n", world_rank, msec/1000, (double)(msec%1000));
-            //printf("Process: %d -> Vertices processed per msec  %.5f\n", world_rank, (double)count/(msec%1000));
 
             cudaMemcpy(&done, d_done , sizeof(int), cudaMemcpyDeviceToHost);
             cudaMemcpy(subNewFrontier, d_newFrontier, sizeof(int) * num_nodes, cudaMemcpyDeviceToHost);
@@ -338,24 +311,13 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
 
             MPI_Allreduce(&done, &globalDone, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
 
-            count = 0;
-            for(i=0; i < num_nodes; i++){
-              if(subNewFrontier[i] == 1 && levels[i] >-1){
-                 count++;
-                 //printf("Process %d: new frontier val: %d\n", world_rank, i);
-              }
-            }
-
-            MPI_Barrier(MPI_COMM_WORLD);
-            printf("Iteration %d : Process %d: new frontier count: %d\n", iterations, world_rank, count);
-
             startCommunicationTime1 = MPI_Wtime();
 
             MPI_Reduce(subNewFrontier, globalOldFrontier, num_nodes, MPI_INT, MPI_LOR, 0, MPI_COMM_WORLD);
-            //Reset new subFrontier values to 0
+
+            //Reset old and new subFrontier values to 0
             memset(subNewFrontier, 0, num_nodes * sizeof(int));
             memset(subOldFrontier, 0, nodesPerProc * sizeof(int));
-
 
             MPI_Allreduce(visited, globalVisited, num_nodes, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 
@@ -363,17 +325,14 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
 
             currentLevel++;
 
-        endIterationTime = MPI_Wtime();
+            endIterationTime = MPI_Wtime();
 
-        if(world_rank == 0){
-            printf("Iteration: %d - Time taken: %.6f s\n", iterations, endIterationTime - startIterationTime);
-
-            printf("Iteration: %d - Communication Time taken for scattering: %.6f s\n", iterations, endCommunicationTime - startCommunicationTime);
-            printf("Iteration: %d - Communication Time taken for reducing: %.6f s\n", iterations, endCommunicationTime1 - startCommunicationTime1);
-
+            if(world_rank == 0){
+                printf("Iteration: %d - Time taken: %.6f s\n", iterations, endIterationTime - startIterationTime);
+                printf("Iteration: %d - Communication Time taken for scattering: %.6f s\n", iterations, endCommunicationTime - startCommunicationTime);
+                printf("Iteration: %d - Communication Time taken for reducing: %.6f s\n", iterations, endCommunicationTime1 - startCommunicationTime1);
+            }
         }
-
-     }
 
     } while (globalDone == 0);
     double endExecution = MPI_Wtime();
@@ -381,32 +340,26 @@ void distributedBFS(int* vertices, int* edges, int num_nodes, int num_edges, int
     if(world_rank == 0){
         printf("Total execution time : %.6f s \n", endExecution - startExecution);
         printf("Number of times the kernel is called : %d \n", iterations);
-
     }
-
 
     MPI_Reduce(levels, globalLevels, num_nodes, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
 
     if(world_rank == 0){
         for(i=0; i < num_nodes; i++){
-
-        if(globalLevels[i] == 0 && i != source){
-            globalLevels[i] = -1;
+            if(globalLevels[i] == 0 && i != source){
+                globalLevels[i] = -1;
+            }
         }
-    }
     }
 
     if(world_rank == 0){
-
         int edgesAnalysed = 0;
         for(i = 0; i < num_nodes; i++){
              if(globalLevels[i] > -1){
                  edgesAnalysed += getDegree(i, vertices, num_nodes);
              }
         }
-
-
-        printf("num_nodes: %d\n", num_nodes);
+        printf("Total number of vertices: %d\n", num_nodes);
         printf("Edges Analysed: %d\n", edgesAnalysed);
         printf("Edges Analysed/sec: %.5f\n", edgesAnalysed/(endExecution - startExecution));
 

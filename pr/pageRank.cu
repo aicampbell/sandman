@@ -34,23 +34,11 @@ int blocks;
 int threads;
 int offset;
 
-void log(double* x, int num_vertices){
-    int i;
-    for(i=0; i < num_vertices; i++){
-        printf("x[%d] = %1f\n", i, x[i]);
-    }
-}
 
+//Set the initial PR values
 __global__ void CUDA_INIT_PR_VALUES(double* d_x, int* d_num_vertices){
     int id = threadIdx.x + blockIdx.x * blockDim.x;
-
     d_x[id] = 1.0f / *d_num_vertices;
-    if(id < 10){
-        double res = (double)1/2692096;
-        printf("GPU float: %5f\n", d_x[id]);
-        printf("GPU res: %.20f\n", res);
-    }
-
 }
 
 //d_y is the output page rank
@@ -73,27 +61,22 @@ __global__ void CUDA_ITERATE_KERNEL(int* d_vertices, int* d_destinations, double
 
             if(d_out_degrees[s] != 0){
                 // new result += previous values / number of out degrees
-                sum += d * d_x[s] / d_out_degrees[s]; // Check this
+                sum += d * d_x[s] / d_out_degrees[s];
             }
         }
-        //Likely need to add this outside of kernel when using MPI. Talk with Hans as this is constant
         sum += (1 - d) / *d_num_vertices;
-
-
-
         d_y[id  + *d_offset] = sum;
     }
 }
-//Do ALL to all after this
 
+//Apply the weights
 __global__ void CUDA_WEIGHTS_KERNEL(double* d_y, double* d_weight, int* d_num_vertices){
-
     int id = threadIdx.x + blockIdx.x * blockDim.x;
-
     d_y[id] += *d_weight * (1.0f / *d_num_vertices);
 
 }
 
+//Swap the old values with the new values
 __global__ void CUDA_SCALE_SWAP_KERNEL(double* d_x, double* d_y, double* d_weight){
     int id = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -101,6 +84,7 @@ __global__ void CUDA_SCALE_SWAP_KERNEL(double* d_x, double* d_y, double* d_weigh
     d_y[id] = 0;
 }
 
+//Initial setup by copying everything to gpu
 void setup(int* vertices, int* destinations, int* out_degrees, int num_vertices, int num_edges, double* x, double* y, int offset,
             int numLocalVertices){
     cudaMalloc((void**)&d_vertices, sizeof(int) * num_vertices);
@@ -137,7 +121,6 @@ void setup(int* vertices, int* destinations, int* out_degrees, int num_vertices,
 }
 
 void iterate(double* inX, double* outX, double* inY, double* outY, int num_vertices){
-
     cudaMemcpy(d_x, inX, sizeof(double) * num_vertices, cudaMemcpyHostToDevice);
     cudaMemcpy(d_y, inY, sizeof(double) * num_vertices, cudaMemcpyHostToDevice);
 
@@ -145,7 +128,6 @@ void iterate(double* inX, double* outX, double* inY, double* outY, int num_verti
 
     cudaMemcpy(outX, d_x, sizeof(double) * num_vertices, cudaMemcpyDeviceToHost);
     cudaMemcpy(outY, d_y, sizeof(double) * num_vertices, cudaMemcpyDeviceToHost);
-
 }
 
 double sum(double* array, int length){
@@ -162,7 +144,7 @@ double sum(double* array, int length){
     return sum;
 }
 
-//Calculate manhatten distance between input and output
+//Calculate manhattan distance between input and output
 double normdiff(double* input, double* output, int length){
     double d = 0;
     double err = 0;
@@ -187,8 +169,6 @@ int factor(int length){
     }
     return res;
 }
-
-
 
 void pageRank(int* vertices, int num_vertices, int* destinations, int num_destinations, int* outDegrees, int* verticesStarts,
                 int world_rank, int world_size, int num_edges){
@@ -231,10 +211,8 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         }
     }
 
-
     threads = factor(numLocalVertices);
     blocks =  numLocalVertices / threads;
-
 
     printf("threads: %d\n", threads);
     printf("blocks: %d\n", blocks);
@@ -252,7 +230,6 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         displs[0] = 0;
         totlen = recvcounts[0];
 
-
         for(i=1 ; i < world_size; i++){
             totlen += recvcounts[i];
             displs[i] = displs[i-1] + recvcounts[i-1];
@@ -260,7 +237,6 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
     }
 
     setup(vertices, destinations, outDegrees, num_vertices, num_destinations, x, y, localDispl, numLocalVertices);
-
 
     MPI_Gatherv(x, numLocalVertices, MPI_DOUBLE, globalX, recvcounts, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     MPI_Gatherv(y, numLocalVertices, MPI_DOUBLE, globalY, recvcounts, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
@@ -294,21 +270,15 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         iterate(globalX, x, globalY, y, num_vertices);
         diff = clock() - start;
         msec = diff * 1000 / CLOCKS_PER_SEC;
-        printf("Process: %d -> Time taken %d seconds %d milliseconds\n", world_rank, msec/1000, msec%1000);
-        printf("Process: %d -> Vertices processed per msec  %.5f\n", world_rank, (double)num_vertices/(msec%1000));
-        printf("Process: %d -> edges processed per msec  %.5f\n", world_rank, (double)num_edges/(msec%1000));
+        printf("Iteration %d - Process: %d -> Time taken %d seconds %d milliseconds\n", iteration, world_rank, msec/1000, msec%1000);
+        printf("Iteration %d - Process: %d -> Vertices processed per msec  %.5f\n", iteration, world_rank, (double)num_vertices/(msec%1000));
+        printf("Iteration %d - Process: %d -> edges processed per msec  %.5f\n", iteration, world_rank, (double)num_edges/(msec%1000));
 
         MPI_Reduce(y, globalY, num_vertices, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
-        if(world_rank == 0 && iteration > 1){
-            for(i=0; i < 50; i++){
-                //printf("globalY[%d]: %.50f\n", i, globalY[i]);
-        }
-        }
-
         if(world_rank == 0){
             double weight = 1.0f - sum(globalY, num_vertices); //ensure y[] sums to 1
-            printf("weight: %.5f\n", weight);
+            printf("iteration: %d - weight: %.5f\n", iteration, weight);
 
 
         cudaMemcpy(d_weight, &weight, sizeof(double), cudaMemcpyHostToDevice);
@@ -342,13 +312,10 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
         MPI_Bcast(&delta, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         MPI_Bcast(globalX, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         endCommunicationTime = MPI_Wtime();
-        //MPI_Bcast(globalY, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-        //MPI_Bcast(y, num_vertices, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
         if(world_rank == 0){
             endIterationTime = MPI_Wtime();
             printf("Iteration: %d - Time taken: %.6f s\n", iteration, endIterationTime - startIterationTime);
-
             printf("Iteration: %d - Communication Time taken: %.6f s\n", iteration, endCommunicationTime - startCommunicationTime);
 
         }
@@ -360,30 +327,32 @@ void pageRank(int* vertices, int num_vertices, int* destinations, int num_destin
 
     if(world_rank == 0){
 
-    if(delta > tol){
+        if(delta > tol){
 
-        printf("\n");
-        printf("Execution Time: %.6f\n", finishExecution - startExecution);
-        printf("\n");
-        printf("No convergence\n");
+            printf("\n");
+            printf("Execution Time: %.6f\n", finishExecution - startExecution);
+            printf("\n");
+            printf("No convergence\n");
+            printf("\n");
 
-        int i;
-        for(i = 0; i < 10; i++){
-            printf("x[%d] = %.70f\n", i, globalX[i]);
+            int i;
+            //only print the first 10 values...
+            for(i = 0; i < 10; i++){
+                printf("x[%d] = %.70f\n", i, globalX[i]);
+            }
         }
-    }
-    else{
-        printf("\n");
-        printf("Execution Time: %.6f s\n", finishExecution - startExecution);
-        printf("\n");
-        printf("Convergence at iteration %d \n", iteration - 1);
-        printf("\n");
-        printf("Values:\n");
+        else{
+            printf("\n");
+            printf("Execution Time: %.6f s\n", finishExecution - startExecution);
+            printf("\n");
+            printf("Convergence at iteration %d \n", iteration - 1);
+            printf("\n");
+            printf("Values:\n");
 
-        int i;
-        for(i =0; i < num_vertices; i++){
-            printf("x[%d] = %.70f\n", i, globalX[i]);
+            int i;
+            for(i =0; i < num_vertices; i++){
+                printf("x[%d] = %.70f\n", i, globalX[i]);
+            }
         }
-    }
     }
 }
