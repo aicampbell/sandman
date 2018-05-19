@@ -70,6 +70,7 @@ void convertToCSC(int maxNodes, int maxEdges, int vertices[], int edges[]) {
 
     for (i = 0; i <= maxNodes; i++) {
         vertices[i] = edge; //start at the point where the previous vertex left off
+
         for(j = edge; j < maxEdges && stop == 0; j++) {
 
             if (i == graph[j][1]){
@@ -116,7 +117,6 @@ void partitionByEdges(int *vertices, int* outDegrees, int numPartitions){
     int v;
     for(v = 0; v < maxNodes; v++){
         assert( current < numPartitions);
-	
         partitionEdges[current] += outDegrees[v];
         size[current] +=1;
         if(partitionEdges[current] >= averageDeg && current < numPartitions -1){
@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     int i;
-    int num_rows = 261321080;
+    int num_rows = 97890601;
     graph = (int**) malloc(sizeof(int*) * num_rows);
     for(i=0; i < num_rows; i++){
         graph[i] = (int*) malloc(sizeof(int) * 2 );
